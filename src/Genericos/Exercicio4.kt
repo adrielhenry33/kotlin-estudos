@@ -17,7 +17,19 @@ sealed interface Resultado<out T> {
 }
 
 fun <T> List<Resultado<T>>.particionar(): Pair<List<T>, List<Throwable>> {
-    TODO("Implemente usando when + smart cast")
+    val sucess= mutableListOf<T>();
+    val erro= mutableListOf<Throwable>();
+
+    this.forEach { par ->
+       when(par) {
+           is Resultado.Sucesso -> sucess.add(par.dado);
+           is Resultado.Erro -> erro.add(par.excecao);
+       }
+
+    }
+
+    return  Pair(sucess, erro);
+
 }
 
 fun main() {
