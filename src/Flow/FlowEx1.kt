@@ -2,7 +2,10 @@ package Flow
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
 
 // Exercício 1: Fundamentos de Flow (map, filter, collect)
@@ -15,6 +18,9 @@ fun precos(): Flow<Int> = flow {
     for (v in valores) {
         // TODO 1: use delay(300) antes de emitir, simulando uma origem assíncrona (ex: sensor, API)
         // TODO 2: emit(v)
+
+        delay(300);
+        emit(v);
     }
 }
 
@@ -29,6 +35,14 @@ suspend fun main() {
     //     .map { ??? }
     //     .filter { ??? }
     //     .collect { println(it) }
+
+
+    precos()
+        .map { it * 0.9 }
+        .onEach { println("Valor com desconto: $it") }
+        .filter { it > 10 }
+        .onEach { println("Passou no filtro (> 10): $it") }
+        .collect { valor -> println("Valor final: $valor") }
 
     // TODO 4 (opcional, pra fixar o "elemento por elemento"):
     //   adicione um println dentro do map e outro dentro do filter mostrando

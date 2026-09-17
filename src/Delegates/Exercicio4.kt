@@ -15,25 +15,25 @@ class CacheDelegate<T>(
     private var ultimoCarregamento: LocalTime? = null
 
     override fun getValue(thisRef: Any, property: KProperty<*>): T {
-        // TODO 1: Verificar se valor está cacheado E não expirou
-        //         if (valor != null && !expirou()) return valor
 
-        // TODO 2: Se expirou ou é null, recarregar:
-        //         println("📥 Recarregando ${property.name}...")
-        //         valor = carregar()
-        //         ultimoCarregamento = LocalTime.now()
-        //         return valor!!
+        if (valor != null && !expirou()) return valor!!;
+
+        valor = carregar();
+        ultimoCarregamento = LocalTime.now();
+        println("O valor $valor foi recarregado as $ultimoCarregamento");
+        return valor!!;
+
     }
 
     override fun setValue(thisRef: Any, property: KProperty<*>, value: T) {
-        // TODO 3: Invalidar cache (limpar)
-        //         valor = null
-        //         ultimoCarregamento = null
-        //         println("🗑️ Cache de ${property.name} invalidado")
+
+        valor = null;
+        ultimoCarregamento = null
+        println("Cache de ${property.name} invalidado ");
+
     }
 
     private fun expirou(): Boolean {
-        // TODO 4: Verificar se passou tempoExpiracaoSegundos desde ultimoCarregamento
-        //         Dica: ChronoUnit.SECONDS.between(ultimoCarregamento, LocalTime.now()) > tempoExpiracaoSegundos
+        return ChronoUnit.SECONDS.between(ultimoCarregamento, LocalTime.now())> tempoExpiracaoSegundos;
     }
 }

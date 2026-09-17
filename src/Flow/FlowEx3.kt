@@ -25,17 +25,17 @@ class BuscaViewModel(private val scope: CoroutineScope) {
         Produto("Nota Fiscal Impressora", 300.0)
     )
 
-    // TODO 1: crie um MutableStateFlow<List<Produto>> privado chamado _resultado, iniciando com listOf()
-    // TODO 2: exponha um StateFlow<List<Produto>> público chamado resultado
+    // TODO 1: guarde o resultado da busca (lista de produtos) como estado interno, privado e mutável, começando vazio
+    // TODO 2: exponha esse estado publicamente, de forma somente-leitura
 
     fun buscar(termo: Flow<String>) {
         scope.launch {
             termo
-                // TODO 3: use .map para transformar cada termo em minúsculas (lowercase())
-                // TODO 4: use .filter para ignorar termos com menos de 2 caracteres
+                // TODO 3: normalize cada termo digitado antes de usar
+                // TODO 4: descarte termos curtos demais pra valer a pena buscar
                 .collect { termoFiltrado ->
-                    // TODO 5: filtre `produtos` cujo nome (em minúsculas) contenha `termoFiltrado`
-                    // TODO 6: atualize _resultado.value com essa lista filtrada
+                    // TODO 5: encontre os produtos cujo nome combina com o termo
+                    // TODO 6: atualize o estado exposto com essa lista
                 }
         }
     }
@@ -44,8 +44,7 @@ class BuscaViewModel(private val scope: CoroutineScope) {
 fun main() = runBlocking {
     val viewModel = BuscaViewModel(this)
 
-    // TODO 7: dispare uma coroutine (launch) que faz .collect em viewModel.resultado
-    //         e imprime os nomes encontrados a cada atualização
+    // TODO 7: observe o estado exposto e imprima os nomes encontrados a cada atualização
 
     val termosDigitados = flow {
         emit("n")

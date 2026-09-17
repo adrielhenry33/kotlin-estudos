@@ -26,11 +26,12 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
 - [ ] **4. Delegação** (`by lazy`, `by delegate`) — EM PROGRESSO
   - [x] Nível 1: Fundações
   - [x] Nível 2: Prático Simples (2.1, 2.2, 2.4)
-  - [ ] Nível 3.4: Cache + Lazy (`Exercicio4.kt` — CacheDelegate, TODOs pendentes) — **ATUAL**
+  - [x] Nível 3.4: Cache + Lazy (`Exercicio4.kt` — CacheDelegate, com expiração)
   - [ ] Nível 4: Aplicações Reais
 - [ ] **5. Flow & StateFlow** — INICIADO (adicionado ao roadmap por ser pré-requisito direto do Compose)
+  - **Regra especial pros exercícios de Flow (pedido em 2026-09-14):** modo "sofrer um pouco" — dar só o enunciado, SEM scaffold de dicas não solicitadas. Só informar nome de função/método do Kotlin/Java se explicitamente perguntado. Não dizer o que fazer, a não ser que peça. Isso substitui o scaffold progressivo padrão (dica 1→2→3) apenas para este tópico.
   - [x] Nível 1: Teoria (cold vs hot, `flow{}`, `emit`, `collect`, `map`/`filter`, `MutableStateFlow`/`StateFlow`)
-  - [ ] Nível 2: Prático Simples (`FlowEx1.kt` pipeline, `FlowEx2.kt` StateFlow, `FlowEx3.kt` combinação — TODOs pendentes)
+  - [ ] Nível 2: Prático Simples (`FlowEx1.kt` pipeline, `FlowEx2.kt` StateFlow, `FlowEx3.kt` combinação — TODOs pendentes) — **ATUAL**
   - [ ] Nível 3+: Avançado (SharedFlow, operators avançados — combine, flatMapLatest, debounce)
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose**
@@ -82,6 +83,10 @@ Não deixar dúvida sem resolver. Se algo não ficar claro após 2 explicações
 
 Código deve ser reutilizável: 1 delegate pra múltiplas propriedades. Considerar thread-safety quando aplicável (múltiplos motoristas/usuários simultâneos). Documentar padrão usado e por quê.
 
+**Regra fixa (pedido em 2026-09-14):** todo projeto/exercício de aplicação real (Nível 4 de qualquer tópico, GodiTrack, Orchestror) deve seguir **MVVM com princípios de Clean Architecture** (separação View / ViewModel / (Use Cases) / Repository / Data Source). Sempre que aplicável, indicar também qual é o **padrão de mercado/indústria** pra aquele problema específico (ex: como empresas resolvem isso normalmente em produção Android/Kotlin), não só a solução didática do exercício.
+
+**Regra ampliada (pedido em 2026-09-17, ajustada no mesmo dia):** isso não é fixo/automático — avaliar o nível de aprendizado no momento. Se o conceito ainda está sendo fundamentado (ex: primeiro contato com `launch`+`collect`), ficar no básico primeiro. A versão de mercado/produção (ex: `viewModelScope`, `collectAsStateWithLifecycle()`, separação Repository) entra como evolução progressiva depois que o básico foi entendido, não como resposta obrigatória em toda pergunta de curiosidade. Avaliar a situação, não aplicar de forma rígida.
+
 ---
 
 ## PACING E RITMO
@@ -110,5 +115,7 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-14** — Delegação Nível 3.4 concluído: `Exercicio4.kt` (CacheDelegate com expiração) implementado e explicado (getValue/setValue, `!!` vs `as T`, diferença lazy vs cache com TTL). Discussão em aberto sobre `setValue` ser write-through (aceita valor direto) vs invalidate-only (força recarregar via `carregar()`) — decisão de design registrada no exercício, não fechada como certo/errado.
 
 - **2026-09-11** — Teoria de Flow/StateFlow explicada; criados `src/Flow/FlowEx1.kt`, `FlowEx2.kt`, `FlowEx3.kt` (pipeline, StateFlow isolado, combinação — pendentes). Delegação Nível 3.4 (`Exercicio4.kt`, CacheDelegate) segue em progresso.
