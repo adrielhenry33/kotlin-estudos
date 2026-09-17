@@ -31,8 +31,10 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
 - [ ] **5. Flow & StateFlow** — INICIADO (adicionado ao roadmap por ser pré-requisito direto do Compose)
   - **Regra especial pros exercícios de Flow (pedido em 2026-09-14):** modo "sofrer um pouco" — dar só o enunciado, SEM scaffold de dicas não solicitadas. Só informar nome de função/método do Kotlin/Java se explicitamente perguntado. Não dizer o que fazer, a não ser que peça. Isso substitui o scaffold progressivo padrão (dica 1→2→3) apenas para este tópico.
   - [x] Nível 1: Teoria (cold vs hot, `flow{}`, `emit`, `collect`, `map`/`filter`, `MutableStateFlow`/`StateFlow`)
-  - [ ] Nível 2: Prático Simples (`FlowEx1.kt` pipeline, `FlowEx2.kt` StateFlow, `FlowEx3.kt` combinação — TODOs pendentes) — **ATUAL**
-  - [ ] Nível 3+: Avançado (SharedFlow, operators avançados — combine, flatMapLatest, debounce)
+  - [x] Nível 2: Prático Simples (`FlowEx1.kt` pipeline; `FlowEx2.kt`/`FlowEx2b.kt` StateFlow; `FlowEx3.kt` combinação Flow+StateFlow; `FlowEx4.kt` checkpoint final — sensor de temperatura, feito sem ajuda/scaffold em 2026-09-17, confirma domínio do padrão StateFlow + launch/collect)
+  - [ ] Nível 3+: Avançado (SharedFlow, operators avançados — combine, flatMapLatest, debounce) — **ATUAL** (decidido em 2026-09-17: fechar Flow/StateFlow antes de ir pra Compose)
+    - Teoria de `SharedFlow`/`combine`/`flatMapLatest`/`debounce` explicada em 2026-09-17.
+    - [ ] `FlowEx5.kt` criado (evolução do `BuscaViewModel` do Ex3 com `debounce`+`flatMapLatest`, simulando busca assíncrona) — sem scaffold. `SharedFlow` e `combine` ainda sem exercício próprio.
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose**
 - [ ] **7. Clean Architecture**

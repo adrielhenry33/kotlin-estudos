@@ -3,6 +3,8 @@ package Flow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -28,14 +30,24 @@ class BuscaViewModel(private val scope: CoroutineScope) {
     // TODO 1: guarde o resultado da busca (lista de produtos) como estado interno, privado e mutável, começando vazio
     // TODO 2: exponha esse estado publicamente, de forma somente-leitura
 
+    private  val _state = MutableStateFlow<MutableList<Produto>>(mutableListOf());
+    val state : StateFlow<MutableList<Produto>> = _state;
+
     fun buscar(termo: Flow<String>) {
         scope.launch {
             termo
-                // TODO 3: normalize cada termo digitado antes de usar
-                // TODO 4: descarte termos curtos demais pra valer a pena buscar
-                .collect { termoFiltrado ->
+                .collect { termoDigitado ->
+                    // TODO 3: normalize cada termo digitado antes de usar
+                    val termoNormalizado = termoDigitado.trim().lowercase()
+
+                    // TODO 4: descarte termos curtos demais pra valer a pena buscar
+                    if (termoNormalizado.length < 3) return@collect
+
                     // TODO 5: encontre os produtos cujo nome combina com o termo
+                    val encontrados = produtos.filter { it.nome.lowercase().contains(termoNormalizado) }
+
                     // TODO 6: atualize o estado exposto com essa lista
+                    _state.value = encontrados.toMutableList()
                 }
         }
     }
@@ -45,6 +57,11 @@ fun main() = runBlocking {
     val viewModel = BuscaViewModel(this)
 
     // TODO 7: observe o estado exposto e imprima os nomes encontrados a cada atualização
+    val job = launch {
+        viewModel.state.collect { encontrados ->
+            println("Encontrados: ${encontrados.map { it.nome }}")
+        }
+    }
 
     val termosDigitados = flow {
         emit("n")
@@ -58,4 +75,5 @@ fun main() = runBlocking {
 
     viewModel.buscar(termosDigitados)
     delay(1000)
+    job.cancel()
 }
