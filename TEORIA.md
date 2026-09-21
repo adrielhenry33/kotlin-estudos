@@ -2,7 +2,7 @@
 
 > Documento vivo. Atualizado automaticamente sempre que avançamos um tópico no `PROGRESSO.md`. Contém a teoria com exemplos de cada assunto já estudado — o `PROGRESSO.md` é a fonte da verdade do *estado* do aprendizado, este arquivo é a fonte da verdade do *conteúdo*.
 
-Última atualização: 2026-09-18 (esclarecimento sobre broadcast em hot flows)
+Última atualização: 2026-09-21 (correção importante: `tryEmit`/`emit` sem coletor ativo sempre têm sucesso, buffer cheio exige coletor lento ativo; lista curada de 9 projetos de Compose; app de streaming como item 10)
 
 ---
 
@@ -27,8 +27,11 @@
     - [ ] Exercício de `combine` — pendente
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose** — não iniciado
+  - Objetivo: 5 a 10 projetos básicos de treino, nível crescente, assim que o tópico começar. Lista curada em `PROGRESSO.md`, extraída de `solygambas/kotlin-projects`.
 - [ ] **7. Clean Architecture** — não iniciado
 - [ ] **8. Room Database** — não iniciado
+- [ ] **9. CI/CD com Gradle para Android** — não iniciado (depois da leva de projetos básicos de Compose)
+- [ ] **10. Projeto avançado: app de streaming** — não iniciado (depois do CI/CD)
 
 ---
 
@@ -349,14 +352,89 @@ class EventosViewModel {
 
 **`replay`**: quantos dos últimos valores emitidos ficam guardados pra entregar a um coletor que chega depois. `replay = 0` (padrão) significa que só quem estava coletando no momento da emissão recebe o valor.
 
-**`extraBufferCapacity`**: espaço extra de buffer além do `replay`, pra emissões que ainda não foram coletadas não travarem o emissor.
+**`extraBufferCapacity`**: espaço extra de buffer, além do `replay`, pra emissões que **já têm coletor(es) ativo(s)** mas que ainda não deram conta de processar o valor anterior. Ele existe só pra evitar que o `emit()` **suspenda** o produtor esperando um coletor lento — não tem nada a ver com histórico pra coletores futuros.
 
-**`onBufferOverflow`**: o que fazer quando o buffer (replay + extra) está cheio e chega uma nova emissão:
+**Ponto de confusão comum (vale grifar): `replay` e `extraBufferCapacity` resolvem problemas diferentes, mesmo compartilhando o mesmo buffer interno.** Um coletor novo sempre começa a ler o buffer exatamente na posição `(total emitido) - replay` — nunca "mais pra trás" que isso, não importa o tamanho do `extraBufferCapacity`. Ou seja: **`extraBufferCapacity` NÃO estende quanto passado um coletor tardio consegue ver.** Só `replay` faz isso.
+
+Prova prática (rodada nesta sessão): com `replay = 0` e `extraBufferCapacity = 10`, emitindo 3 valores e só depois iniciando um coletor — o coletor **não recebe nenhum dos três**, exatamente como se `extraBufferCapacity` fosse 0:
+
+```kotlin
+val flow = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 10)
+
+flow.emit("aguardando")
+flow.emit("motorista a caminho")
+flow.emit("em andamento")
+
+delay(50)
+
+launch { flow.collect { println("Tela nova recebeu: $it") } }
+delay(100)
+// nada é impresso — extraBufferCapacity não ajuda coletor tardio, só replay ajudaria
+```
+
+**`onBufferOverflow`**: o que fazer quando o buffer (replay + extra) está cheio e chega uma nova emissão vinda de um produtor mais rápido que os coletores ativos:
 - `BufferOverflow.SUSPEND` (padrão): o emissor suspende até haver espaço.
 - `BufferOverflow.DROP_OLDEST`: descarta o valor mais antigo do buffer pra abrir espaço pro novo.
 - `BufferOverflow.DROP_LATEST`: descarta o valor novo que está tentando entrar, mantendo o buffer como está.
 
-**`emit()` vs `tryEmit()`**: `emit()` é `suspend` — se o buffer estiver cheio e a estratégia for `SUSPEND`, ela espera. `tryEmit()` **não é suspend**, tenta emitir imediatamente e devolve `Boolean` dizendo se conseguiu — essencial quando você precisa emitir de um contexto não-suspenso (ex: um callback de hardware, um listener de UI).
+**`emit()` vs `tryEmit()`**: `emit()` é `suspend` — se o buffer estiver cheio e a estratégia for `SUSPEND`, ela espera até haver espaço. `tryEmit()` **não é suspend**: tenta emitir imediatamente e devolve `Boolean` dizendo se conseguiu (`true`) ou se foi descartado por falta de espaço no buffer (`false`) — essencial quando você precisa emitir de um contexto que não pode ser `suspend` (ex: um callback de hardware, um listener de UI, um `Thread` comum).
+
+```kotlin
+class RastreadorGps {
+    private val _localizacoes = MutableSharedFlow<Localizacao>(
+        replay = 0,
+        extraBufferCapacity = 2 // aguenta 2 emissões "adiantadas" sem suspender
+    )
+    val localizacoes: SharedFlow<Localizacao> = _localizacoes.asSharedFlow()
+
+    // callback do hardware — NÃO é suspend, então emit() nem compilaria aqui
+    fun aoReceberDoHardware(localizacao: Localizacao) {
+        val conseguiu = _localizacoes.tryEmit(localizacao)
+        if (conseguiu) {
+            println("Emitido: $localizacao")
+        } else {
+            println("Descartado (buffer cheio): $localizacao")
+        }
+    }
+}
+```
+
+**Correção importante, descoberta e provada nesta sessão (2026-09-21): isso só acontece se já existir um coletor ativo.** Sem nenhum coletor coletando, `tryEmit`/`emit` **sempre têm sucesso**, não importa o `extraBufferCapacity` — não existe "buffer cheio" quando não tem ninguém esperando pra consumir o valor (não faz sentido recusar algo que ninguém vai ver mesmo).
+
+Prova prática (buffer de tamanho 1, zero coletores, 5 tentativas de emissão):
+
+```kotlin
+val flow = MutableSharedFlow<Int>(replay = 0, extraBufferCapacity = 1)
+
+repeat(5) { i ->
+    println("tryEmit($i) sem coletor = ${flow.tryEmit(i)}")
+}
+// tryEmit(0) sem coletor = true
+// tryEmit(1) sem coletor = true
+// tryEmit(2) sem coletor = true
+// tryEmit(3) sem coletor = true
+// tryEmit(4) sem coletor = true   <- todas true, buffer de 1 "nunca enche"
+```
+
+**O cenário que realmente demonstra buffer cheio:** um coletor **ativo e lento** (que ainda não processou o valor anterior) recebendo emissões mais rápido do que consegue consumir. Só nesse caso o buffer (replay + extra) enche de verdade e `tryEmit` começa a devolver `false`:
+
+```kotlin
+launch {
+    rastreador.localizacoes.collect {
+        delay(200) // coletor lento — não dá conta do ritmo do produtor
+        println("Processado: $it")
+    }
+}
+
+delay(50) // garante que o coletor já está rodando
+repeat(5) { i ->
+    rastreador.aoReceberDoHardware(Localizacao(i.toDouble(), i.toDouble()))
+    // a partir da 3ª chamada (replay=0 + extraBufferCapacity=2 = buffer de 2),
+    // tryEmit começa a devolver false, porque o coletor lento ainda não abriu espaço
+}
+```
+
+É esse o cenário que o exercício `SharedFlowEx3` pede pra observar.
 
 **Caso de uso GodiTrack:** `StateFlow` pro **status da corrida** (sempre existe um status atual — "aguardando", "em andamento"), `SharedFlow` (`replay = 0`) pro **evento de corrida cancelada** — uma tela que abre depois do cancelamento não deveria "descobrir" um cancelamento que já passou, mas deveria ver o status atual imediatamente.
 
@@ -410,6 +488,22 @@ Cenário prático em construção: `BuscaAsyncViewModel` (`FlowEx5.kt`) — term
 
 _Teoria será adicionada quando o tópico começar._
 
+**Objetivo combinado em 2026-09-21:** ao chegar em Compose e começar a fazer projetos, criar entre 5 e 10 projetos básicos pra treinar Kotlin/Compose na prática, com nível crescente a cada um — treino solto, separado dos projetos reais de Nível 4 (GodiTrack/Orchestror).
+
+**Lista curada (2026-09-21), extraída do repo [`solygambas/kotlin-projects`](https://github.com/solygambas/kotlin-projects)** (25 projetos didáticos de um curso de Android Kotlin; a maioria no original usa View system/XML/LiveData — a ideia é reproduzir cada um adaptado pra **Compose + StateFlow/Coroutines**, que já é o padrão desta trilha, não copiar a stack antiga). Ordem crescente de dificuldade:
+
+| # | Projeto original | O que treina | Por que entra na lista |
+|---|---|---|---|
+| 1 | Temperature Converter | Compose básico, sem estado complexo | Aquecimento — já é Compose no original |
+| 2 | Guessing Game | Compose + ViewModel + estado observável | Trocar `LiveData` (original) por `StateFlow` (o que vocês já dominam) |
+| 3 | Todo List | CRUD em memória + lista | `LazyColumn` no lugar do RecyclerView original |
+| 4 | Stopwatch | Cronômetro, ciclo de vida | Compose + Coroutines (`LaunchedEffect`/`delay` em loop) — ponto forte de vocês |
+| 5 | Tasks | MVVM + Room + lista | Entrada natural assim que Room (item 8) começar |
+| 6 | Mars Photos | Consumo de API REST com Retrofit | Primeira rede de verdade, junto com Compose |
+| 7 | DevBytes | Room + Retrofit + Coroutines + cache offline | Capstone antes de fechar Clean Architecture (item 7) — repository/single-source-of-truth |
+| 8 | Wander | Google Maps + localização | Conecta direto com o domínio do GodiTrack (rotas, rastreamento) |
+| 9 | To-Do Notes | Testes automatizados (Room + Coroutines) | Ponte direta pro item 9 (CI/CD) — CI sem teste automatizado não faz muito sentido |
+
 ## 7. Clean Architecture — não iniciado
 
 _Teoria será adicionada quando o tópico começar._
@@ -417,3 +511,15 @@ _Teoria será adicionada quando o tópico começar._
 ## 8. Room Database — não iniciado
 
 _Teoria será adicionada quando o tópico começar._
+
+## 9. CI/CD com Gradle para Android — não iniciado
+
+_Teoria será adicionada quando o tópico começar._
+
+## 10. Projeto avançado: app de streaming — não iniciado
+
+_Teoria será adicionada quando o tópico começar._
+
+**Objetivo combinado em 2026-09-21:** depois do CI/CD, projeto de fechamento mais avançado. Referência conceitual: o app open-source **CloudStream** (Kotlin, arquitetura de plugins carregados dinamicamente, Media3/ExoPlayer pra reprodução de vídeo, OkHttp/Jsoup pros provedores). A ideia é reproduzir a **arquitetura** — catálogo consumido de uma API legal, player com Media3, cache/favoritos com Room, paginação (Paging 3), Clean Architecture completa — e não as fontes de conteúdo pirateado do projeto original.
+
+**Objetivo combinado em 2026-09-21:** depois da leva de projetos básicos de Compose, configurar CI/CD pra Android usando o `gradlew` (ex: GitHub Actions rodando `./gradlew test`, `assembleDebug`, lint a cada push/PR) — aprender do zero, nunca configurou CI pra Android antes.

@@ -18,6 +18,69 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
 
 ---
 
+## ROADMAP VISUAL (onde estamos)
+
+> Atualizar sempre que a posição mudar. `✅` concluído · `🔄` em andamento · `⬜` não iniciado · `👈 VOCÊ ESTÁ AQUI` marca a posição exata.
+
+```
+✅ 1. Tratamento de Erros (Try/Catch, Result<T>)
+     │
+     ▼
+✅ 2. Collections Avançadas (fold, reduce)
+     │
+     ▼
+✅ 3. Coroutines (suspend, scopes, dispatchers, launch, async, timeout)
+     │
+     ▼
+🔄 4. Delegação (by lazy, by delegate)
+     ├─ ✅ Nível 1: Fundações
+     ├─ ✅ Nível 2: Prático Simples
+     ├─ ✅ Nível 3.4: Cache + Lazy (CacheDelegate com expiração)
+     └─ ⬜ Nível 4: Aplicações Reais (GodiTrack/Orchestror)
+     │
+     ▼
+🔄 5. Flow & StateFlow
+     ├─ ✅ Nível 1: Teoria (cold vs hot, flow{}, emit, collect, StateFlow)
+     ├─ ✅ Nível 2: Prático (FlowEx1 a FlowEx4)
+     ├─ 🔄 Nível 3+: Avançado
+     │    ├─ ✅ Teoria: SharedFlow (replay, buffer, extraBufferCapacity,
+     │    │             onBufferOverflow, emit vs tryEmit)
+     │    ├─ ✅ Teoria: combine
+     │    ├─ 🔄 Exercícios SharedFlow (src/Flow/SharedFlow/)
+     │    │    ├─ ✅ Ex1 — broadcast básico multi-coletor (feito e corrigido)
+     │    │    ├─ 🔄 Ex2 — replay com coletor tardio (replay ainda não bate
+     │    │    │         com o pedido do enunciado — revisar antes de seguir)
+     │    │    ├─ 🔄 Ex3 — emit vs tryEmit + extraBufferCapacity   👈 VOCÊ ESTÁ AQUI
+     │    │    │         (TODO 1-3 ok; TODO 4/5 reescritos em 2026-09-21 —
+     │    │    │         enunciado original tinha premissa errada, corrigida)
+     │    │    ├─ ⬜ Ex4 — comparação das 3 estratégias onBufferOverflow
+     │    │    └─ ⬜ Ex5 — StateFlow (status) + SharedFlow (evento), GodiTrack
+     │    ├─ ⬜ FlowEx5.kt — debounce + flatMapLatest
+     │    └─ ⬜ Exercício de combine
+     └─ ⬜ Nível 4: Aplicações Reais
+     │
+     ▼
+⬜ 6. Jetpack Compose
+     └─ 9 projetos curados (Temperature Converter → To-Do Notes,
+        ver lista completa abaixo), nível crescente
+     │
+     ▼
+⬜ 7. Clean Architecture
+     │
+     ▼
+⬜ 8. Room Database
+     │
+     ▼
+⬜ 9. CI/CD com Gradle para Android
+     │
+     ▼
+⬜ 10. Projeto avançado: app de streaming (arquitetura estilo CloudStream)
+```
+
+**Depois de terminar `SharedFlowEx3`:** revisar `SharedFlowEx2` (ajustar `replay` pro valor pedido), depois `Ex4`, `Ex5`, `FlowEx5`, exercício de `combine` — só aí Flow & StateFlow fecha e Compose (item 6) começa.
+
+---
+
 ## ROADMAP KOTLIN
 
 - [x] **1. Tratamento de Erros** (Try/Catch, `Result<T>`) — CONCLUÍDO
@@ -41,8 +104,21 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
     - **Ordem combinada em 2026-09-18:** terminar `SharedFlowEx2` a `SharedFlowEx5` → `FlowEx5.kt` (debounce/flatMapLatest) → exercício de `combine` (fecha Nível 3+ de Flow) → só depois entrar em `callbackFlow`/`shareIn` (padrão de mercado pra conectar fontes externas tipo SSE/WebSocket a um `SharedFlow`, discutido em 2026-09-18 mas propositalmente adiado).
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose**
+  - **Objetivo combinado em 2026-09-21:** assim que começar Compose e partir pra projetos básicos, criar entre **5 e 10 projetos básicos** pra treinar Kotlin/Compose na prática, aumentando o nível de dificuldade a cada um (não são os projetos reais de Nível 4 do GodiTrack/Orchestror — são treino solto, mais numeroso e mais leve).
+  - **Lista curada em 2026-09-21**, extraída do repo [`solygambas/kotlin-projects`](https://github.com/solygambas/kotlin-projects) (25 projetos didáticos, análise feita nesta sessão — a maioria usa View system/XML/LiveData no original; reproduzir adaptando pra **Compose + StateFlow/Coroutines**, que já é o padrão desta trilha, em vez de copiar a stack antiga). Ordem crescente de dificuldade:
+    1. **Temperature Converter** (`08-temperature-converter`) — já é Compose puro, conversor simples, sem estado complexo. Aquecimento.
+    2. **Guessing Game** (`06-guessing-game`) — Compose + ViewModel + estado observável (no original usa LiveData; reproduzir com `StateFlow`, que vocês já dominam).
+    3. **Todo List** (`01-todo-list`) — CRUD em memória + lista (`LazyColumn` em vez do RecyclerView original).
+    4. **Stopwatch** (`02-stopwatch`) — cronômetro; boa combinação Compose + Coroutines (`LaunchedEffect`/loop com `delay`), que já é ponto forte de vocês.
+    5. **Tasks** (`07-tasks`) — MVVM + Room + lista. Ponto de entrada natural assim que o item 8 (Room) entrar no roadmap.
+    6. **Mars Photos** (`10-mars-photos`) — consumo de API REST com Retrofit + Compose.
+    7. **DevBytes** (`12-devbytes`) — Room + Retrofit + Coroutines + cache offline (repository/single-source-of-truth) — bom capstone antes de fechar Clean Architecture "de verdade" (item 7).
+    8. **Wander** (`18-wander`) — Google Maps + localização do usuário. Tematicamente conecta direto com GodiTrack (rotas, rastreamento) — vale priorizar por relevância de domínio, mesmo não sendo o próximo da lista por dificuldade.
+    9. **To-Do Notes** (`25-to-do-notes`) — testes automatizados de um projeto Android (Room + Coroutines). Ponte direta pro item 9 (CI/CD) — CI sem teste automatizado não faz muito sentido.
 - [ ] **7. Clean Architecture**
 - [ ] **8. Room Database**
+- [ ] **9. CI/CD com Gradle para Android** — **objetivo adicionado em 2026-09-21**, a ser feito depois da leva de projetos básicos de Compose (item 6). Usuário nunca configurou CI pra Android e quer aprender do zero (ex: GitHub Actions rodando `./gradlew test`/`assembleDebug`/lint a cada push/PR).
+- [ ] **10. Projeto avançado: app de streaming** — **objetivo adicionado em 2026-09-21**, a ser feito depois da leva de projetos básicos de Compose e do CI/CD, como projeto de fechamento mais avançado. Referência conceitual discutida: o app open-source **CloudStream** (Kotlin, plugin architecture, Media3/ExoPlayer) — reproduzir a arquitetura (catálogo via API legal, player com Media3, cache/favoritos com Room, paginação, Clean Architecture completa), **não** as fontes de conteúdo pirateado do projeto original.
 
 ---
 
@@ -121,6 +197,8 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-21** — Descoberta importante durante o `SharedFlowEx3`: provado por teste isolado que, sem nenhum coletor ativo, `tryEmit`/`emit` de um `SharedFlow` **sempre têm sucesso**, não importa o `extraBufferCapacity` — o "buffer cheio" só existe de verdade com um coletor ativo e lento. O enunciado original do TODO 4 pedia pra testar isso sem coletor (premissa errada, corrigida no arquivo e no `TEORIA.md`/PDF). Usuário também identificou e corrigiu sozinho um feedback loop que tinha colocado (chamar o "hardware" de dentro do próprio `collect` do mesmo flow).
 
 - **2026-09-14** — Delegação Nível 3.4 concluído: `Exercicio4.kt` (CacheDelegate com expiração) implementado e explicado (getValue/setValue, `!!` vs `as T`, diferença lazy vs cache com TTL). Discussão em aberto sobre `setValue` ser write-through (aceita valor direto) vs invalidate-only (força recarregar via `carregar()`) — decisão de design registrada no exercício, não fechada como certo/errado.
 
