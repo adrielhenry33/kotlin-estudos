@@ -2,7 +2,7 @@
 
 > Documento vivo. Atualizado automaticamente sempre que avançamos um tópico no `PROGRESSO.md`. Contém a teoria com exemplos de cada assunto já estudado — o `PROGRESSO.md` é a fonte da verdade do *estado* do aprendizado, este arquivo é a fonte da verdade do *conteúdo*.
 
-Última atualização: 2026-09-21 (correção importante: `tryEmit`/`emit` sem coletor ativo sempre têm sucesso, buffer cheio exige coletor lento ativo; lista curada de 9 projetos de Compose; app de streaming como item 10)
+Última atualização: 2026-09-22 (exemplo completo do caso GodiTrack StateFlow+SharedFlow, `SharedFlowEx5` verificado e concluído)
 
 ---
 
@@ -377,6 +377,60 @@ delay(100)
 - `BufferOverflow.DROP_OLDEST`: descarta o valor mais antigo do buffer pra abrir espaço pro novo.
 - `BufferOverflow.DROP_LATEST`: descarta o valor novo que está tentando entrar, mantendo o buffer como está.
 
+### Exemplo completo comparando as 3 estratégias (`SharedFlowEx4`, 2026-09-22)
+
+Cenário: um sensor de temperatura emite uma leitura a cada 10ms (`emitirLeitura`, via `tryEmit`); o painel que exibe (`collect`) é lento, gasta 100ms processando cada leitura. Buffer: `replay = 0`, `extraBufferCapacity = 2` (capacidade total: 2). Emite-se `1..6` seguidos.
+
+**Regra de raciocínio pra rastrear qualquer um desses testes:** um valor só ocupa espaço no buffer se, no momento em que chega, o coletor **já estiver ocupado** processando outra coisa. Se o coletor estiver livre (parado esperando), a entrega é direta, sem passar pelo buffer.
+
+**Trilha comum aos 3 casos**, antes de divergirem:
+```
+1 → emitido, mas ainda não existe inscrito nenhum (launch só agendou, não rodou) → PERDIDO
+2 → coletor já inscrito e LIVRE (parado esperando) → entregue DIRETO, sem passar pelo buffer
+    (a partir daqui o coletor fica ocupado, processando "2" por 100ms)
+3 → coletor ocupado → vai pro buffer → buffer = {3}         (1/2)
+4 → coletor ainda ocupado → vai pro buffer → buffer = {3,4} (2/2, CHEIO)
+```
+A partir daqui (`5` e `6` chegando com o buffer já cheio) é que cada estratégia se comporta diferente:
+
+**`SUSPEND`** — `tryEmit` não pode esperar, então recusa na hora quando não cabe:
+```
+5 → buffer cheio {3,4} → tryEmit RECUSA → "Buffer cheio 5 descartado" (false)
+6 → buffer ainda cheio → tryEmit RECUSA → "Buffer cheio 6 descartado" (false)
+(coletor termina de processar "2", pega o buffer na ordem: "3", depois "4")
+Painel recebeu: 2, 3, 4
+```
+
+**`DROP_OLDEST`** — sempre aceita o novo, expulsando o mais antigo do buffer pra abrir vaga:
+```
+5 → buffer cheio {3,4} → expulsa o mais antigo ("3") → buffer = {4,5} → tryEmit = true
+6 → buffer cheio {4,5} → expulsa o mais antigo ("4") → buffer = {5,6} → tryEmit = true
+(coletor termina de processar "2", pega o que sobrou no buffer: "5", depois "6")
+Painel recebeu: 2, 5, 6
+```
+Ninguém que já está no buffer é "seguro" — a cada nova chegada, o mais velho de plantão é o próximo a cair. Favorece o dado **mais recente**.
+
+**`DROP_LATEST`** — sempre aceita "com sucesso", mas descarta o próprio valor novo se não couber:
+```
+5 → buffer cheio {3,4} → descarta o PRÓPRIO "5" → buffer continua {3,4} → tryEmit = true (!)
+6 → buffer cheio {3,4} → descarta o PRÓPRIO "6" → buffer continua {3,4} → tryEmit = true (!)
+(coletor termina de processar "2", pega "3", depois "4")
+Painel recebeu: 2, 3, 4
+```
+Quem já está no buffer é intocável pra sempre; só quem tenta entrar depois do buffer cheio corre risco. Favorece o dado **mais antigo já em fila**.
+
+**Comparação final:**
+
+| Estratégia | Painel recebeu | O que se perde | `tryEmit` avisa a perda? |
+|---|---|---|---|
+| `SUSPEND` | 2, 3, 4 | 5, 6 (recusados na hora) | Sim — devolve `false` |
+| `DROP_OLDEST` | 2, 5, 6 | 3, 4 (expulsos do buffer pelos mais novos) | Não — sempre `true` |
+| `DROP_LATEST` | 2, 3, 4 | 5, 6 (descartados em silêncio) | Não — sempre `true` |
+
+**Pegadinha real, provada nesse exercício: com `DROP_OLDEST` e `DROP_LATEST`, `tryEmit` sempre retorna `true`, mesmo quando o valor foi descartado.** Só `SUSPEND` faz `tryEmit` devolver `false` de verdade quando algo se perde. Isso significa que, com `DROP_OLDEST`/`DROP_LATEST`, **o retorno booleano de `tryEmit` não serve pra saber se o SEU valor específico foi entregue** — do ponto de vista da API, a operação "não falhou" (o buffer sempre dá um jeito de acomodar a emissão, seja expulsando o mais antigo, seja ignorando o novo), só o dado em si que pode não ter sido guardado.
+
+**Conexão com GodiTrack:** `DROP_OLDEST` é a escolha natural pra localização GPS em tempo real — se o app não consegue processar tudo a tempo, você quer a posição **mais recente** do motorista, não uma leitura antiga que já está obsoleta. Já um log de transações (onde perder qualquer evento seria inaceitável) pediria `SUSPEND`, aceitando que o produtor fique mais lento em vez de perder dado.
+
 **`emit()` vs `tryEmit()`**: `emit()` é `suspend` — se o buffer estiver cheio e a estratégia for `SUSPEND`, ela espera até haver espaço. `tryEmit()` **não é suspend**: tenta emitir imediatamente e devolve `Boolean` dizendo se conseguiu (`true`) ou se foi descartado por falta de espaço no buffer (`false`) — essencial quando você precisa emitir de um contexto que não pode ser `suspend` (ex: um callback de hardware, um listener de UI, um `Thread` comum).
 
 ```kotlin
@@ -437,6 +491,35 @@ repeat(5) { i ->
 É esse o cenário que o exercício `SharedFlowEx3` pede pra observar.
 
 **Caso de uso GodiTrack:** `StateFlow` pro **status da corrida** (sempre existe um status atual — "aguardando", "em andamento"), `SharedFlow` (`replay = 0`) pro **evento de corrida cancelada** — uma tela que abre depois do cancelamento não deveria "descobrir" um cancelamento que já passou, mas deveria ver o status atual imediatamente.
+
+**Exemplo completo, verificado em exercício (`SharedFlowEx5`, 2026-09-22):**
+
+```kotlin
+class CorridaViewModel(private val scope: CoroutineScope) {
+    private val _status = MutableStateFlow("aguardando")
+    val status: StateFlow<String> = _status.asStateFlow()
+
+    private val _evento = MutableSharedFlow<String>(replay = 0)
+    val evento: SharedFlow<String> = _evento.asSharedFlow()
+
+    fun atualizarStatus(novoStatus: String) { _status.value = novoStatus }
+
+    fun cancelarCorrida() {
+        scope.launch { _evento.emit("Corrida cancelada") }
+        // sem job.cancel() aqui — emit() termina sozinho, não é um collect infinito
+    }
+}
+```
+
+Resultado observado com 3 coletores em momentos diferentes (status tardio, evento antes do cancelamento, evento depois do cancelamento):
+
+```
+Status recebido: em andamento                                  ← tardio, mas StateFlow entrega na hora
+Cancelamento recebido (coletor de ANTES): Corrida cancelada     ← já estava ouvindo, recebe
+                                                                 ← coletor de DEPOIS: nenhuma linha — SharedFlow não guarda nada pra quem chega atrasado
+```
+
+**Erro recorrente encontrado ao implementar isso:** cair de novo no padrão "`cancel()` logo após `launch`, sem nenhuma pausa no meio" — o mesmo bug do `SharedFlowEx4`, só que reaparecendo em 3 lugares diferentes do mesmo arquivo (dentro de `cancelarCorrida()`, e nos dois `launch` da `main`). Reforça a regra: **todo `launch` de um coletor precisa de um `delay` antes de qualquer `cancel()` ou emissão que dependa dele já estar rodando.**
 
 ### `combine`
 

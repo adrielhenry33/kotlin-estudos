@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.milliseconds
 
 // SharedFlow — Exercício 5: caso de uso real GodiTrack — evento vs estado
 //
@@ -25,21 +27,25 @@ import kotlinx.coroutines.runBlocking
 
 class CorridaViewModel(private val scope: CoroutineScope) {
 
-    // TODO 1: escolha o tipo certo (Flow "quente" com estado atual) pro status
-    //         da corrida, privado/mutável, começando em "aguardando"
-    // TODO 2: exponha o status publicamente, somente-leitura
+    // Estado: StateFlow, sempre tem valor atual, coletor tardio vê o vigente na hora.
+    private val _status = MutableStateFlow("aguardando")
+    val status: StateFlow<String> = _status.asStateFlow()
 
-    // TODO 3: escolha o tipo certo (Flow "quente" sem estado, replay = 0) pro
-    //         evento de cancelamento, privado/mutável
-    // TODO 4: exponha o evento publicamente, somente-leitura
+    // Evento: SharedFlow com replay = 0, só quem já está coletando recebe.
+    private val _evento = MutableSharedFlow<String>(replay = 0)
+    val evento: SharedFlow<String> = _evento.asSharedFlow()
 
     fun atualizarStatus(novoStatus: String) {
-        // TODO 5: atualize o estado
+        _status.value = novoStatus
     }
 
     fun cancelarCorrida() {
+        // emit(), não tryEmit(): estamos num contexto suspenso (dentro de um launch),
+        // não é um callback de hardware — não tem motivo pra recusar em vez de esperar.
+        // Também NÃO cancelamos esse job: emit() é uma chamada única que termina
+        // sozinha assim que entrega o valor, diferente de um collect (que é infinito).
         scope.launch {
-            // TODO 6: emita o evento de cancelamento (pense: emit ou tryEmit?)
+            _evento.emit("Corrida cancelada")
         }
     }
 }
@@ -50,22 +56,40 @@ fun main() = runBlocking {
     viewModel.atualizarStatus("motorista a caminho")
     viewModel.atualizarStatus("em andamento")
 
-    delay(50)
+    delay(50.milliseconds)
 
-    // TODO 7: inicie um coletor TARDIO do status (depois das atualizações acima)
-    //         e confirme que ele já recebe "em andamento" imediatamente
+    // TODO 7: coletor TARDIO do status — inicia bem depois das atualizações,
+    // mas por ser StateFlow, recebe "em andamento" (o valor vigente) imediatamente.
+    val jobStatus = launch {
+        viewModel.status.collect { status ->
+            println("Status recebido: $status")
+        }
+    }
 
-    // TODO 8: inicie um coletor do evento de cancelamento ANTES de cancelar,
-    //         imprimindo "Cancelamento recebido!" quando ele chegar
+    // TODO 8: coletor do evento, iniciado ANTES do cancelamento acontecer.
+    val jobEventoAntes = launch {
+        viewModel.evento.collect { evento ->
+            println("Cancelamento recebido (coletor de ANTES): $evento")
+        }
+    }
 
-    delay(50)
+    delay(50.milliseconds) // garante que os dois coletores acima já estão inscritos
+
     viewModel.cancelarCorrida()
 
-    delay(50)
+    delay(50.milliseconds) // dá tempo do evento ser entregue ao coletor de antes
 
-    // TODO 9: inicie um SEGUNDO coletor do evento de cancelamento, mas só DEPOIS
-    //         que cancelarCorrida() já rodou. Confirme que ele NÃO recebe nada
-    //         (diferente do que aconteceria com o status, que tem replay do valor atual)
+    // TODO 9: coletor do evento, iniciado DEPOIS que cancelarCorrida() já rodou.
+    // Diferente do status (que tem "replay" do valor atual), esse NÃO deve receber nada.
+    val jobEventoDepois = launch {
+        viewModel.evento.collect { evento ->
+            println("Cancelamento recebido (coletor de DEPOIS): $evento")
+        }
+    }
 
-    delay(100)
+    delay(100.milliseconds) // tempo suficiente pra confirmar que esse coletor fica em silêncio
+
+    jobStatus.cancel()
+    jobEventoAntes.cancel()
+    jobEventoDepois.cancel()
 }

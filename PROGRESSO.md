@@ -48,14 +48,17 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
      │    ├─ ✅ Teoria: combine
      │    ├─ 🔄 Exercícios SharedFlow (src/Flow/SharedFlow/)
      │    │    ├─ ✅ Ex1 — broadcast básico multi-coletor (feito e corrigido)
-     │    │    ├─ 🔄 Ex2 — replay com coletor tardio (replay ainda não bate
-     │    │    │         com o pedido do enunciado — revisar antes de seguir)
-     │    │    ├─ 🔄 Ex3 — emit vs tryEmit + extraBufferCapacity   👈 VOCÊ ESTÁ AQUI
-     │    │    │         (TODO 1-3 ok; TODO 4/5 reescritos em 2026-09-21 —
-     │    │    │         enunciado original tinha premissa errada, corrigida)
-     │    │    ├─ ⬜ Ex4 — comparação das 3 estratégias onBufferOverflow
-     │    │    └─ ⬜ Ex5 — StateFlow (status) + SharedFlow (evento), GodiTrack
-     │    ├─ ⬜ FlowEx5.kt — debounce + flatMapLatest
+     │    │    ├─ ✅ Ex2 — replay com coletor tardio (concluído em 2026-09-22 —
+     │    │    │         replay = 2 ajustado, últimos 2 status entregues certinho)
+     │    │    ├─ ✅ Ex3 — emit vs tryEmit + extraBufferCapacity (concluído em
+     │    │    │         2026-09-21 — buffer cheio com coletor lento observado corretamente)
+     │    │    ├─ ✅ Ex4 — comparação das 3 estratégias onBufferOverflow (concluído em
+     │    │    │         2026-09-22 — resultado bateu com a teoria nas 3 estratégias;
+     │    │    │         descoberta de bônus: tryEmit sempre true em DROP_OLDEST/DROP_LATEST)
+     │    │    └─ ✅ Ex5 — StateFlow (status) + SharedFlow (evento), GodiTrack (concluído em
+     │    │              2026-09-22 — resolvido com apoio direto após 3 tentativas com o mesmo
+     │    │              padrão de bug: cancel() logo após launch, sem dar tempo do coletor rodar)
+     │    ├─ ⬜ FlowEx5.kt — debounce + flatMapLatest   👈 VOCÊ ESTÁ AQUI
      │    └─ ⬜ Exercício de combine
      └─ ⬜ Nível 4: Aplicações Reais
      │
@@ -197,6 +200,12 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-22** — `SharedFlowEx2.kt` corrigido e concluído (trocou `replay` de `1`/`0` pra `2`, coletor tardio agora recebe os últimos 2 status certinho). **Fecha os 5 exercícios de `SharedFlow`** — próximo passo é `FlowEx5.kt` (debounce/flatMapLatest) e o exercício de `combine`, pra fechar o Nível 3+ de Flow/StateFlow.
+
+- **2026-09-22** — `SharedFlowEx5.kt` concluído (caso GodiTrack: `StateFlow` pro status da corrida + `SharedFlow` pro evento de cancelamento). Usuário caiu 3 vezes seguidas no mesmo padrão de bug (`cancel()`/nested-`collect` matando o coletor antes dele rodar) em posições diferentes do arquivo; pediu a solução completa no fim, entregue e explicada — fecha o **Nível 3+ de Flow/StateFlow inteiro em exercícios de `SharedFlow`** (falta só revisar o `Ex2`, `FlowEx5` e o exercício de `combine` antes do Nível 4).
+
+- **2026-09-22** — `SharedFlowEx4.kt` concluído (comparação `SUSPEND`/`DROP_OLDEST`/`DROP_LATEST`), depois de dois bugs de scheduling corrigidos com ajuda de review (job.cancel() logo após o launch matava o coletor antes dele se inscrever; e faltava o `delay(100)` dentro do `collect` pra simular coletor lento). Resultado final bateu exatamente com a teoria, com uma descoberta extra: **`tryEmit` sempre retorna `true` em `DROP_OLDEST`/`DROP_LATEST`, mesmo quando o valor é descartado** — só `SUSPEND` reporta `false` de verdade. Registrado no `TEORIA.md`.
 
 - **2026-09-21** — Descoberta importante durante o `SharedFlowEx3`: provado por teste isolado que, sem nenhum coletor ativo, `tryEmit`/`emit` de um `SharedFlow` **sempre têm sucesso**, não importa o `extraBufferCapacity` — o "buffer cheio" só existe de verdade com um coletor ativo e lento. O enunciado original do TODO 4 pedia pra testar isso sem coletor (premissa errada, corrigida no arquivo e no `TEORIA.md`/PDF). Usuário também identificou e corrigiu sozinho um feedback loop que tinha colocado (chamar o "hardware" de dentro do próprio `collect` do mesmo flow).
 

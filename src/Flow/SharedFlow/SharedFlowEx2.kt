@@ -21,7 +21,7 @@ class HistoricoStatus {
 
     // TODO 2: exponha publicamente como somente-leitura
 
-    private val _mState = MutableSharedFlow<String>(1);
+    private val _mState = MutableSharedFlow<String>(2);
     val mState : SharedFlow<String> = _mState.asSharedFlow();
 
     suspend fun atualizarStatus(status: String) {
