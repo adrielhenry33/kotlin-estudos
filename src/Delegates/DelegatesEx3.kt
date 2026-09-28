@@ -15,7 +15,7 @@ class TransformadorDelegate<T>(
 
     override fun getValue(thisRef: Any, property: KProperty<*>): T {
         println("Lendo o valor ${property.name} = $valor");
-        return  valor;
+        return  valor;+3
     }
 
     override fun setValue(thisRef: Any, property: KProperty<*>, value: T) {

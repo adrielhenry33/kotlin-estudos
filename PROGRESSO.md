@@ -58,8 +58,15 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
      │    │    └─ ✅ Ex5 — StateFlow (status) + SharedFlow (evento), GodiTrack (concluído em
      │    │              2026-09-22 — resolvido com apoio direto após 3 tentativas com o mesmo
      │    │              padrão de bug: cancel() logo após launch, sem dar tempo do coletor rodar)
-     │    ├─ ⬜ FlowEx5.kt — debounce + flatMapLatest   👈 VOCÊ ESTÁ AQUI
-     │    └─ ⬜ Exercício de combine
+     │    ├─ ✅ FlowEx5.kt — debounce + flatMapLatest (concluído em 2026-09-22 — pipeline
+     │    │         map/debounce/flatMapLatest/collect certo, timing conferido e bateu)
+     │    ├─ ✅ FlowEx6.kt — debounce + flatMapLatest, tema Orchestror (validação de
+     │    │         e-mail em tempo real) — concluído em 2026-09-28 sem ajuda, saída e
+     │    │         timing conferidos
+     │    ├─ ✅ FlowEx7.kt — combine, carrinho de compras: itens + cupom + tipo de
+     │    │         entrega → resumo — concluído em 2026-09-28 COM solução entregue
+     │    │         (usuário se perdeu no bloco do combine; revisar sem olhar depois)
+     │    └─ ⬜ stateIn / shareIn / callbackFlow   👈 VOCÊ ESTÁ AQUI
      └─ ⬜ Nível 4: Aplicações Reais
      │
      ▼
@@ -163,6 +170,8 @@ Não deixar dúvida sem resolver. Se algo não ficar claro após 2 explicações
 
 ## REGRAS COM PROJETOS REAIS
 
+**Regra de variedade (pedido em 2026-09-28):** não prender exemplos e exercícios só ao GodiTrack/Orchestror — "nem tudo é sobre eles". Variar domínios (e-commerce, streaming, jogos, clima, finanças etc.). Os dois projetos ainda podem aparecer como exemplo de vez em quando, e continuam sendo o alvo do Nível 4.
+
 - **GodiTrack:** foco em performance (lazy loading rotas), logging de transações motorista, sincronização servidor.
 - **Orchestror:** foco em validação (email, telefone, CPF), auditoria (quem mudou contato), integridade de dados (status com transições).
 
@@ -200,6 +209,10 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-28** — `FlowEx7.kt` (combine, carrinho) finalizado **com solução completa entregue** a pedido do usuário. Ele acertou sozinho os StateFlows de origem, o `update { it + item }` e as funções públicas, mas travou no bloco do `combine`. Erros conceituais: (1) `{ a, b, c -> { ... } }` (o hábito do arrow function do JS cria uma lambda que devolve outra lambda); (2) tentar atribuir `_resumo.value.subtotal = ...` dentro do combine (as propriedades são `val` e o combine não escreve estado, só devolve um valor novo); (3) usar `map` como loop em vez de `sumOf`; (4) `aplicarCupom` ignorando string vazia impedia remover o cupom. TODO 8 resolvido com `coroutineContext.cancelChildren()`. Todos os totais bateram (165/200/180/210/165). **Ponto fraco a reforçar:** lambda que devolve valor (última expressão) vs lambda com efeito colateral. Próximo: `stateIn` (substitui o padrão launch+collect+`_state.value`), depois `shareIn`/`callbackFlow`.
+
+- **2026-09-28** — `FlowEx6.kt` concluído sem ajuda (map → debounce → flatMapLatest → collect, StateFlow exposto via `asStateFlow()`, coletor cancelado no fim). Saída conferida rodando: `Digitando` → `JaCadastrado(adriel@...)` → `Disponivel(novo@...)`. Observação de estilo: `;` no fim das linhas não é idiomático em Kotlin, e `object` em sealed class deveria ser `data object` (toString legível). Criado `FlowEx7.kt` (exercício de `combine`; cenário trocado no mesmo dia pra carrinho de compras, a pedido do usuário, pra sair do escopo GodiTrack/Orchestror). Revisão de `combine` feita antes do exercício — último exercício do Nível 3+ de Flow antes de `callbackFlow`/`shareIn`/`stateIn` e do Nível 4.
 
 - **2026-09-22** — `SharedFlowEx2.kt` corrigido e concluído (trocou `replay` de `1`/`0` pra `2`, coletor tardio agora recebe os últimos 2 status certinho). **Fecha os 5 exercícios de `SharedFlow`** — próximo passo é `FlowEx5.kt` (debounce/flatMapLatest) e o exercício de `combine`, pra fechar o Nível 3+ de Flow/StateFlow.
 

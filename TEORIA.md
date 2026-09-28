@@ -2,7 +2,7 @@
 
 > Documento vivo. Atualizado automaticamente sempre que avançamos um tópico no `PROGRESSO.md`. Contém a teoria com exemplos de cada assunto já estudado — o `PROGRESSO.md` é a fonte da verdade do *estado* do aprendizado, este arquivo é a fonte da verdade do *conteúdo*.
 
-Última atualização: 2026-09-22 (exemplo completo do caso GodiTrack StateFlow+SharedFlow, `SharedFlowEx5` verificado e concluído)
+Última atualização: 2026-09-28 (`FlowEx6` e `FlowEx7` concluídos; revisão de `combine`; erros comuns na lambda do combine)
 
 ---
 
@@ -22,9 +22,11 @@
   - [ ] Nível 3+: Avançado (SharedFlow, combine, flatMapLatest, debounce) — **ATUAL**
     - [x] Teoria de `SharedFlow` (replay, buffer, `extraBufferCapacity`, `onBufferOverflow`, `emit` vs `tryEmit`)
     - [x] Teoria de `combine`
-    - [ ] Exercícios `SharedFlowEx1` a `SharedFlowEx5` (`src/Flow/SharedFlow/`) — em resolução
-    - [ ] `FlowEx5.kt` (`debounce` + `flatMapLatest`) — pendente
-    - [ ] Exercício de `combine` — pendente
+    - [x] Exercícios `SharedFlowEx1` a `SharedFlowEx5` (`src/Flow/SharedFlow/`)
+    - [x] `FlowEx5.kt` (`debounce` + `flatMapLatest`)
+    - [x] `FlowEx6.kt` (`debounce` + `flatMapLatest`, Orchestror validação de e-mail)
+    - [x] `FlowEx7.kt` (`combine`, carrinho de compras)
+    - [ ] `stateIn` / `shareIn` / `callbackFlow` — **ATUAL**
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose** — não iniciado
   - Objetivo: 5 a 10 projetos básicos de treino, nível crescente, assim que o tópico começar. Lista curada em `PROGRESSO.md`, extraída de `solygambas/kotlin-projects`.
@@ -558,12 +560,105 @@ Ponte com TypeScript/RxJS: `combine` é o `combineLatest` do RxJS.
 
 **Caso de uso Orchestror:** validação de formulário com campos independentes — habilitar o botão "salvar" só quando email E telefone forem válidos, reagindo a mudança em qualquer um dos dois campos.
 
-### `debounce` e `flatMapLatest` (introduzidos, exercício em aberto)
+**Revisão (2026-09-28) — detalhes que importam na prática:**
 
-- **`debounce(tempoMs)`**: só deixa passar um valor se nenhum outro valor chegar dentro da janela de tempo especificada — usado pra evitar disparar uma busca a cada tecla digitada.
+- **Forma de extensão:** `flowA.combine(flowB) { a, b -> ... }` é equivalente a `combine(flowA, flowB) { a, b -> ... }`.
+- **3 a 5 flows:** existem sobrecargas tipadas até 5 (`combine(f1, f2, f3) { a, b, c -> ... }`). Acima disso, a versão com lista/vararg entrega um `Array<T>`, e você perde a tipagem individual.
+- **Com `StateFlow`, emite na hora:** `StateFlow` sempre tem valor, então `combine` de `StateFlow`s já emite a primeira combinação assim que é coletado. Com `flow { }` frio, só emite depois que todos emitiram pelo menos uma vez.
+- **Retorna `Flow`, não `StateFlow`:** o resultado de `combine` é um `Flow` frio comum. Pra expor como estado, ou você coleta e joga num `MutableStateFlow` (o que estamos fazendo até agora), ou usa `stateIn(...)`, que é o padrão de mercado e o próximo assunto.
+- **Não completa sozinho se as fontes forem hot:** `combine` só termina quando **todas** as fontes terminam. `StateFlow` nunca termina.
+- **Conflation:** se duas fontes `StateFlow` mudam ao mesmo tempo, sem nenhuma suspensão no meio, o coletor pode ver só a combinação final e pular as intermediárias. É o mesmo comportamento de conflation do `StateFlow` que já vimos.
+
+**`combine` vs `zip` vs `merge`:**
+
+| Operador | Emite quando | Usa | Caso típico |
+|---|---|---|---|
+| `combine` | qualquer fonte emite | último valor de cada fonte | estado derivado (filtros + lista, formulário, carrinho) |
+| `zip` | as duas fontes emitem o "par" seguinte | valores pareados por posição | juntar requisição N com resposta N |
+| `merge` | qualquer fonte emite | só o valor que chegou (mesmo tipo) | juntar eventos de várias origens num stream só |
+
+**Exemplo fora do escopo dos projetos — catálogo de filmes com filtros:**
+
+```kotlin
+val filmes = MutableStateFlow(listOf<Filme>())
+val genero = MutableStateFlow<Genero?>(null)
+val soNaoAssistidos = MutableStateFlow(false)
+
+val filmesVisiveis: Flow<List<Filme>> =
+    combine(filmes, genero, soNaoAssistidos) { lista, g, naoAssistidos ->
+        lista
+            .filter { g == null || it.genero == g }
+            .filter { !naoAssistidos || !it.assistido }
+    }
+```
+
+Mudar o gênero, marcar o toggle ou chegar um filme novo recalcula a lista visível, sempre com o último valor de cada filtro.
+
+**Solução de referência (`FlowEx7.kt`, carrinho, 2026-09-28):**
+
+```kotlin
+init {
+    scope.launch {
+        combine(_itens, _cupom, _tipoEntrega) { itens, cupom, entrega ->
+            calcularResumo(itens, cupom, entrega)     // última expressão = valor emitido
+        }.collect { resumo ->
+            _resumo.value = resumo                     // único lugar que escreve o estado
+        }
+    }
+}
+
+private fun calcularResumo(itens: List<ItemCarrinho>, cupom: String, entrega: TipoEntrega): ResumoCarrinho {
+    val subtotal = itens.sumOf { it.precoUnitario * it.quantidade }
+    val desconto = if (cupom == "DESCONTO10") subtotal * 0.10 else 0.0
+    val frete = if (entrega == TipoEntrega.PADRAO && subtotal >= 200.0) 0.0 else entrega.valorFrete
+    return ResumoCarrinho(subtotal, desconto, frete, subtotal - desconto + frete)
+}
+```
+
+**Erros comuns ao escrever a lambda do `combine`:**
+
+- **`{ a, b -> { ... } }`**: é o hábito do arrow function do JS/TS. Em Kotlin, as chaves de dentro criam **outra lambda**, então o `combine` emite uma função, não o seu resultado. O corpo já começa logo depois do `->`.
+- **Escrever estado dentro do bloco** (`_resumo.value.subtotal = ...`): não compila, porque as propriedades de data class com `val` não podem ser reatribuídas. E mesmo que compilasse, estaria errado: o bloco do `combine` deve ser uma **transformação pura**, que recebe valores e devolve um objeto novo. Quem escreve o estado é o `collect`.
+- **`map` usado como loop**: `map` serve pra transformar uma lista em outra lista. Pra somar, use `sumOf { ... }`, e pra só iterar, `forEach`.
+- **Isolar a regra de negócio numa função pura** (`calcularResumo`) deixa o `combine` com uma linha só e a regra testável sem coroutine nenhuma.
+- **Encerrar coletores de `StateFlow` na `main`**: `coroutineContext.cancelChildren()` cancela todos os filhos do `runBlocking` de uma vez (o collect do ViewModel e o da main). No Android, quem faz isso é o `viewModelScope`, que é cancelado no `onCleared()`.
+
+### `debounce` e `flatMapLatest`
+
+- **`debounce(tempoMs)`**: só deixa passar um valor se nenhum outro valor chegar dentro da janela de tempo especificada — usado pra evitar disparar uma busca a cada tecla digitada. Recebe `Duration` (ex: `300.milliseconds`).
 - **`flatMapLatest`**: pra cada novo valor emitido, dispara um novo flow interno (ex: uma chamada de rede) e **cancela** o flow interno anterior se ele ainda não tiver terminado — evita que uma busca antiga "atropele" o resultado de uma busca mais recente.
 
-Cenário prático em construção: `BuscaAsyncViewModel` (`FlowEx5.kt`) — termo digitado → `debounce(300ms)` → `flatMapLatest` chamando uma busca simulada de rede.
+**Opt-in necessário:** os dois ainda pedem anotação explícita — `debounce` exige `@OptIn(FlowPreview::class)`, `flatMapLatest` exige `@OptIn(ExperimentalCoroutinesApi::class)` (dá pra combinar os dois na mesma anotação: `@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)`). Isso é o mecanismo de opt-in do Kotlin: a biblioteca avisa que a API ainda pode mudar de forma incompatível numa versão futura, e você precisa reconhecer esse risco explicitamente pra usar.
+
+**Pipeline completo verificado (`FlowEx5.kt`, 2026-09-22):**
+
+```kotlin
+termos
+    .map { termo -> termo.trim().lowercase() }           // normaliza antes de tudo
+    .debounce(300.milliseconds)                          // só passa após 300ms de silêncio
+    .flatMapLatest { termo -> buscarNoServidor(termo) }   // busca, cancela a anterior se preciso
+    .collect { resultado -> _busca.value = resultado }    // atualiza o estado exposto
+```
+
+Resultado observado com a sequência `"n"` → 50ms → `"no"` → 50ms → `"note"` → pausa de 600ms → `"nota"` → 600ms:
+
+```
+Resultado : []                                              ← valor inicial do StateFlow
+Resultado : [Notebook, Notebook Gamer]                       ← só depois de "note" (300ms sem novo termo)
+Resultado : [Nota Fiscal Impressora]                          ← só depois de "nota"
+```
+
+`"n"` e `"no"` nunca chegam a virar busca — são engolidos pelo `debounce` porque o próximo termo chega antes dos 300ms passarem.
+
+Exercício de reforço (`FlowEx6.kt`, concluído em 2026-09-28): mesmo padrão, tema Orchestror — validação de e-mail em tempo real durante cadastro, verificando no "servidor" (simulado) se o e-mail já está cadastrado. Feito sem ajuda. Saída observada:
+
+```
+Resultado Flow.StatusEmail$Digitando@52d455b8                    ← valor inicial
+Resultado JaCadastrado(email=adriel@goditransportes.com.br)      ← ~800ms (100 + 300 debounce + 400 servidor)
+Resultado Disponivel(email=novo@empresa.com)                      ← ~1400ms (700 + 300 + 400)
+```
+
+**`object` vs `data object` em sealed class:** repare no `Digitando@52d455b8` — um `object` comum usa o `toString()` padrão do Java (nome da classe + hash). Desde o Kotlin 1.9, o idiomático é `data object Digitando : StatusEmail()`, que gera `toString()` = `"Digitando"` (além de `equals`/`hashCode` consistentes). Padrão de mercado pra estados sem dados dentro de `sealed class`/`sealed interface` de UI state.
 
 ---
 
