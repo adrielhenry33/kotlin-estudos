@@ -2,7 +2,7 @@
 
 > Documento vivo. Atualizado automaticamente sempre que avançamos um tópico no `PROGRESSO.md`. Contém a teoria com exemplos de cada assunto já estudado — o `PROGRESSO.md` é a fonte da verdade do *estado* do aprendizado, este arquivo é a fonte da verdade do *conteúdo*.
 
-Última atualização: 2026-09-28 (`FlowEx6` e `FlowEx7` concluídos; revisão de `combine`; erros comuns na lambda do combine)
+Última atualização: 2026-09-29 (`StateInEx1` fechado; início de Compose: teoria do Nível 1)
 
 ---
 
@@ -19,16 +19,19 @@
 - [ ] **5. Flow & StateFlow** — EM PROGRESSO
   - [x] Nível 1: Teoria (cold vs hot, `flow{}`, `emit`, `collect`, `map`/`filter`, `MutableStateFlow`/`StateFlow`)
   - [x] Nível 2: Prático Simples
-  - [ ] Nível 3+: Avançado (SharedFlow, combine, flatMapLatest, debounce) — **ATUAL**
+  - [x] Nível 3+: Avançado (SharedFlow, combine, flatMapLatest, debounce, stateIn)
     - [x] Teoria de `SharedFlow` (replay, buffer, `extraBufferCapacity`, `onBufferOverflow`, `emit` vs `tryEmit`)
     - [x] Teoria de `combine`
     - [x] Exercícios `SharedFlowEx1` a `SharedFlowEx5` (`src/Flow/SharedFlow/`)
     - [x] `FlowEx5.kt` (`debounce` + `flatMapLatest`)
     - [x] `FlowEx6.kt` (`debounce` + `flatMapLatest`, Orchestror validação de e-mail)
     - [x] `FlowEx7.kt` (`combine`, carrinho de compras)
-    - [ ] `stateIn` / `shareIn` / `callbackFlow` — **ATUAL**
+    - [x] Teoria de `stateIn`
+    - [x] `StateInEx1.kt` (`src/Flow/StateIn/`) — Parte A e B3 (B4/B5 com o usuário)
+    - [ ] `shareIn` / `callbackFlow` — adiado, aprender no caminho
   - [ ] Nível 4: Aplicações Reais
-- [ ] **6. Jetpack Compose** — não iniciado
+- [ ] **6. Jetpack Compose** — EM PROGRESSO
+  - [ ] Nível 1: Fundações (declarativo, `@Composable`, composição/recomposição, `remember`/`mutableStateOf`, state hoisting) — teoria ✅ 2026-09-29, perguntas pendentes — **ATUAL**
   - Objetivo: 5 a 10 projetos básicos de treino, nível crescente, assim que o tópico começar. Lista curada em `PROGRESSO.md`, extraída de `solygambas/kotlin-projects`.
 - [ ] **7. Clean Architecture** — não iniciado
 - [ ] **8. Room Database** — não iniciado
@@ -660,11 +663,324 @@ Resultado Disponivel(email=novo@empresa.com)                      ← ~1400ms (7
 
 **`object` vs `data object` em sealed class:** repare no `Digitando@52d455b8` — um `object` comum usa o `toString()` padrão do Java (nome da classe + hash). Desde o Kotlin 1.9, o idiomático é `data object Digitando : StatusEmail()`, que gera `toString()` = `"Digitando"` (além de `equals`/`hashCode` consistentes). Padrão de mercado pra estados sem dados dentro de `sealed class`/`sealed interface` de UI state.
 
+
+### `stateIn` (teoria dada em 2026-09-28)
+
+**Definição:** operador que transforma um `Flow` **frio** num `StateFlow` **quente**, compartilhado entre todos os coletores, com um valor atual sempre disponível. É o jeito de mercado de expor estado **derivado** num ViewModel (resultado de `combine`, `map`, consulta ao banco etc.).
+
+```kotlin
+fun <T> Flow<T>.stateIn(
+    scope: CoroutineScope,      // onde a coleta do upstream vai rodar (no Android: viewModelScope)
+    started: SharingStarted,    // QUANDO começar e parar de coletar o upstream
+    initialValue: T             // valor do StateFlow antes do upstream emitir
+): StateFlow<T>
+```
+
+Não precisa de `@OptIn`: é API estável.
+
+**Antes e depois (carrinho do `FlowEx7`):**
+
+```kotlin
+// Antes: 4 peças manuais
+private val _resumo = MutableStateFlow(ResumoCarrinho())
+val resumo: StateFlow<ResumoCarrinho> = _resumo.asStateFlow()
+init {
+    scope.launch {
+        combine(_itens, _cupom, _tipoEntrega) { i, c, e -> calcularResumo(i, c, e) }
+            .collect { _resumo.value = it }
+    }
+}
+
+// Depois: uma declaração
+val resumo: StateFlow<ResumoCarrinho> =
+    combine(_itens, _cupom, _tipoEntrega) { i, c, e -> calcularResumo(i, c, e) }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), ResumoCarrinho())
+```
+
+As **fontes** (`_itens`, `_cupom`, `_tipoEntrega`) continuam `MutableStateFlow`, porque a View precisa alterar. Só o estado **derivado** vira `stateIn`, e ele é somente-leitura por natureza (não tem `.value =`).
+
+**Por que "compartilhado" importa — frio vs quente:**
+
+```kotlin
+val cotacao = flow {
+    println("abrindo conexão com a API")   // efeito caro
+    emit(buscarCotacao())
+}
+
+// Sem stateIn: cada coletor roda o flow do zero → 2 conexões
+launch { cotacao.collect { ... } }
+launch { cotacao.collect { ... } }
+
+// Com stateIn: 1 conexão, os 2 coletores recebem o mesmo valor
+val cotacaoState = cotacao.stateIn(scope, SharingStarted.Lazily, null)
+launch { cotacaoState.collect { ... } }
+launch { cotacaoState.collect { ... } }
+```
+
+**As 3 estratégias de `SharingStarted`:**
+
+| Estratégia | Começa a coletar o upstream | Para | Uso |
+|---|---|---|---|
+| `Eagerly` | imediatamente, mesmo sem coletor | nunca (só quando o scope é cancelado) | dado que precisa estar pronto antes da tela abrir |
+| `Lazily` | no 1º coletor | nunca | começar sob demanda, mas manter pra sempre |
+| `WhileSubscribed(ms)` | no 1º coletor | `ms` depois que o **último** coletor sai | **padrão no Android** |
+
+```
+coletores:   0 ──── 1 ──── 2 ──── 1 ──── 0 ········(5s)········ para upstream
+upstream:    parado  ▶ roda ─────────────────────────────────── ■ parado
+                                               ↑ se alguém voltar antes dos 5s,
+                                                 o upstream nem chega a parar
+```
+
+**Por que `WhileSubscribed(5_000)` é a recomendação oficial do Android:**
+- **Rotação de tela:** a Activity é destruída e recriada, e o coletor sai e volta em menos de 1s. Com os 5s de folga, o upstream **não reinicia**, então não refaz consulta nem requisição.
+- **App em segundo plano:** a UI para de coletar (com `collectAsStateWithLifecycle`). Depois de 5s, o upstream para, o que economiza GPS, banco, rede e bateria. Quando o usuário volta, o `StateFlow` ainda tem o **último valor** (a tela não pisca vazia) e o upstream volta a rodar.
+- `Eagerly`/`Lazily` nunca param. Isso serve pra dado leve, mas desperdiça recurso com fonte cara (localização, socket).
+
+**Pegadinhas:**
+
+1. **Declare como `val`, uma única vez.** `stateIn` dentro de uma função ou de um `get()` cria um `StateFlow` **novo** (e uma coleta nova) a cada chamada:
+   ```kotlin
+   fun resumo() = combine(...).stateIn(...)          // ERRADO: novo StateFlow a cada chamada
+   val resumo = combine(...).stateIn(...)            // CERTO: um só, compartilhado
+   ```
+2. **O escopo mantém uma coroutine viva.** Mesmo com `WhileSubscribed`, o `stateIn` lança no `scope` uma coroutine que fica esperando coletores. Num `runBlocking`, o programa não termina sozinho: cancele com `coroutineContext.cancelChildren()` (no Android, o `viewModelScope` resolve isso no `onCleared()`).
+3. **`initialValue` aparece primeiro.** Antes do upstream emitir, quem coleta recebe o valor inicial. Escolha um valor que faça sentido na tela: lista vazia, `null`, um estado `Carregando`...
+4. **Conflation e `equals`:** como qualquer `StateFlow`, valores iguais ao atual (por `equals`) não são reemitidos.
+
+**Variante `suspend` (sem valor inicial):** `val state = flow.stateIn(scope)` suspende até o upstream emitir o primeiro valor e usa esse valor como inicial. Ela usa `Eagerly` por baixo, e é útil fora da UI quando você não tem um valor inicial razoável.
+
+**Irmão: `shareIn`** (detalhado depois): `flow.shareIn(scope, started, replay = 0)` devolve um `SharedFlow` em vez de `StateFlow`. Ele não tem valor inicial, não tem `.value` e não faz conflation por `equals`. Serve pra **eventos** ou quando não existe um "estado atual" que faça sentido.
+
+**Ponte com RxJS:** `stateIn` ≈ `BehaviorSubject` / `shareReplay({ bufferSize: 1, refCount: true })`. `WhileSubscribed` ≈ `refCount` (com um atraso antes de desconectar). `shareIn` ≈ `share()` / `shareReplay(n)`.
+
 ---
 
-## 6. Jetpack Compose — não iniciado
+## 6. Jetpack Compose — EM PROGRESSO
 
-_Teoria será adicionada quando o tópico começar._
+### Nível 1 — Fundações (teoria dada em 2026-09-29)
+
+#### 1. O que é o Compose: UI declarativa
+
+**Definição:** Jetpack Compose é o toolkit moderno de UI do Android. Você descreve **como a tela deve ser para um estado**, e o Compose se encarrega de atualizar a tela quando esse estado muda.
+
+- **Imperativo (jeito antigo, View/XML):** você cria a tela uma vez e depois **muda ela na mão** (`textView.text = "..."`, `button.isEnabled = false`). Esquecer uma atualização gera bug de tela dessincronizada.
+- **Declarativo (Compose):** você **não muda a tela**. Você muda o **estado**, e a função que descreve a tela roda de novo com o valor novo.
+
+> 📝 Caderno
+> UI = f(estado)
+> Imperativo: "mude o texto para X"
+> Declarativo: "a tela é assim quando o estado é X"
+> Não mexo na tela, mexo no estado
+
+**Ponte com React:** é o mesmo modelo mental do React. A diferença é que não existe JSX nem virtual DOM: são funções Kotlin normais, e um plugin do compilador rastreia quais estados cada função leu.
+
+#### 2. Função `@Composable`
+
+**Definição:** uma função marcada com `@Composable` descreve um pedaço da UI. Ela não devolve uma View: ela **emite** a UI para dentro da árvore do Compose.
+
+```kotlin
+@Composable
+fun Saudacao(nome: String) {
+    Text("Olá, $nome!")
+}
+```
+
+Regras e convenções:
+- Nome em **PascalCase** (`Saudacao`, não `saudacao`), como um componente React.
+- A que emite UI devolve `Unit`, ou seja, não tem `return` de valor.
+- Os **parâmetros são as "props"**: dados entram por parâmetro.
+- Ela **só pode ser chamada de outra `@Composable`**, assim como uma `suspend` só pode ser chamada de outra `suspend` ou de uma coroutine. Não é coincidência: nos dois casos o compilador adiciona um parâmetro escondido (a `suspend` recebe `Continuation`, a `@Composable` recebe o `Composer`).
+- Deve ser **rápida e sem efeito colateral**: nada de chamar API, gravar em banco ou lançar coroutine direto no corpo. Ela pode rodar muitas vezes (ver recomposição).
+
+> 📝 Caderno
+> @Composable = função que desenha um pedaço da tela
+> PascalCase · devolve Unit · parâmetros = props
+> Só chamada por outra @Composable (igual suspend)
+> Corpo sem efeito colateral: pode rodar N vezes
+
+**Peças mínimas usadas nos exemplos** (a fundo depois, no Nível 2):
+- `Text("...")`: mostra texto.
+- `Button(onClick = { ... }) { Text("...") }`: botão. A última lambda é o **conteúdo** do botão, o "children" do React. Esse padrão se chama **slot**.
+- `Column { ... }`: empilha os filhos **na vertical**, como um `flex-direction: column`.
+
+#### 3. Composição e árvore de UI
+
+Quando a tela abre, o Compose executa as funções `@Composable` e monta uma **árvore** com o que elas emitiram. Esse processo se chama **composição**.
+
+```
+TelaClima()
+ └─ Column
+     ├─ Text("São Paulo")
+     └─ Button
+         └─ Text("Atualizar")
+```
+
+> 📝 Caderno
+> Composição = rodar as @Composable e montar a árvore da UI
+> Composição inicial: 1ª vez que a tela aparece
+
+#### 4. Recomposição
+
+**Definição:** quando um **estado lido** por uma função `@Composable` muda, o Compose **roda essa função de novo** para atualizar a árvore. É o "re-render" do React.
+
+Ciclo:
+
+```
+estado muda ──► Compose marca quem LEU esse estado
+            ──► roda de novo só essas funções (recomposição)
+            ──► pula as funções cujos parâmetros não mudaram
+            ──► tela atualizada
+```
+
+Consequências práticas:
+- A recomposição é **granular**: só re-executa quem leu o estado que mudou, não a tela inteira.
+- Uma função pode rodar **muitas vezes** (em animação, até a cada frame). Por isso o corpo não pode ter efeito colateral: uma chamada de API ali seria disparada várias vezes.
+- Variável comum dentro da função é **recriada do zero** a cada recomposição. Guardar valor entre recomposições exige `remember` (próximo item).
+
+> 📝 Caderno
+> Recomposição = rodar de novo a @Composable quando um estado que ela LEU muda
+> Granular: só quem leu · pula quem não mudou
+> Pode rodar muitas vezes → sem efeito colateral
+> Variável local morre a cada recomposição
+
+#### 5. Estado: `mutableStateOf` e `remember`
+
+São duas peças com funções diferentes:
+
+| Peça | O que faz | Ponte |
+|---|---|---|
+| `mutableStateOf(v)` | Cria um valor **observável**: quando muda, dispara recomposição de quem o leu | Parecido com `MutableStateFlow`, mas feito para o Compose |
+| `remember { ... }` | **Guarda** um valor entre recomposições (roda o bloco só na 1ª vez) | Parecido com o `by lazy` (calcula uma vez e guarda) |
+| `remember { mutableStateOf(v) }` | Estado observável que **sobrevive** às recomposições | `useState(v)` do React |
+
+```kotlin
+@Composable
+fun Contador() {
+    var cliques by remember { mutableStateOf(0) }
+
+    Button(onClick = { cliques++ }) {
+        Text("Cliquei $cliques vezes")
+    }
+}
+```
+
+Leitura linha a linha:
+- `mutableStateOf(0)`: estado observável que começa em 0.
+- `remember { ... }`: na 1ª composição cria o estado, e nas recomposições devolve **o mesmo** objeto.
+- `by`: é **delegação de propriedade** (tópico 4!). Permite escrever `cliques` e `cliques++` em vez de `cliques.value`. Precisa dos imports `androidx.compose.runtime.getValue` e `setValue`, que são exatamente o `getValue`/`setValue` de um delegate.
+- O clique muda o estado → o `Text` que leu `cliques` recompõe → o número muda na tela.
+
+Erros clássicos:
+
+```kotlin
+var cliques by mutableStateOf(0)            // ❌ sem remember: volta a 0 a cada recomposição
+var cliques = 0                             // ❌ não é observável: muda, mas a tela não sabe
+var lista by remember { mutableStateOf(mutableListOf<String>()) }
+lista.add("x")                              // ❌ mutou por dentro: o estado não percebe
+lista = lista + "x"                         // ✅ valor novo → recompõe (igual imutabilidade no React)
+```
+
+Genéricos por trás (mesmo desenho de `StateFlow`/`MutableStateFlow`):
+
+```kotlin
+fun <T> mutableStateOf(value: T): MutableState<T>
+interface State<out T> { val value: T }                  // só leitura
+interface MutableState<T> : State<T> { override var value: T }  // leitura + escrita
+inline fun <T> remember(calculation: () -> T): T
+```
+
+**`remember` vs `rememberSaveable`:**
+- `remember` sobrevive à **recomposição**, mas se perde ao **girar a tela** (a Activity é recriada) ou quando o composable sai da tela.
+- `rememberSaveable` sobrevive também a girar a tela e à morte do processo, porque salva num `Bundle`. Serve para tipos simples (texto digitado, número, booleano).
+
+> 📝 Caderno
+> mutableStateOf = valor observável (muda → recompõe)
+> remember = guarda entre recomposições
+> var x by remember { mutableStateOf(0) } ≈ useState(0)
+> Sem remember → reseta · sem mutableStateOf → tela não sabe
+> Lista: criar nova (lista + item), nunca .add()
+> rememberSaveable = sobrevive a girar a tela
+
+#### 6. State hoisting (elevar o estado) e fluxo unidirecional
+
+**Definição:** tirar o estado de dentro de um composable e passá-lo **por parâmetro**, junto com uma função de evento. O composable vira **stateless**: ele só mostra o que recebe e avisa quando algo acontece.
+
+Padrão de assinatura: `valor: T` + `onValorChange: (T) -> Unit`.
+
+```kotlin
+// stateless: não guarda nada, só mostra e avisa
+@Composable
+fun CampoCidade(cidade: String, onCidadeChange: (String) -> Unit) {
+    TextField(value = cidade, onValueChange = onCidadeChange)
+}
+
+// stateful: é dono do estado
+@Composable
+fun TelaClima() {
+    var cidade by remember { mutableStateOf("") }
+
+    Column {
+        CampoCidade(cidade = cidade, onCidadeChange = { cidade = it })
+        Text("Buscando: $cidade")
+    }
+}
+```
+
+Fluxo unidirecional (UDF):
+
+```
+        estado desce ▼
+TelaClima ───────────────► CampoCidade
+          ◄───────────────
+        ▲ evento sobe (onCidadeChange)
+```
+
+Por que fazer assim:
+- **Uma fonte da verdade:** o `Text` e o campo mostram o mesmo `cidade`.
+- **Reuso:** `CampoCidade` serve em qualquer tela.
+- **Teste e preview:** um stateless é só função com parâmetro.
+- **Casa com o ViewModel:** mais para frente, o dono do estado deixa de ser o `remember` e passa a ser o `StateFlow` do ViewModel. É o mesmo desenho do `ClimaViewModel` do `StateInEx1`: `trocarCidade()` é o evento que sobe, `uiState` é o estado que desce.
+
+> 📝 Caderno
+> Hoisting = estado sobe pro pai; filho recebe (valor, onChange)
+> Estado desce ▼ · evento sobe ▲ (UDF)
+> Stateless: só mostra e avisa · Stateful: dono do estado
+> = "lifting state up" do React
+
+#### 7. Resumo: ponte React ↔ Compose
+
+| React | Compose |
+|---|---|
+| Componente | Função `@Composable` |
+| Props | Parâmetros |
+| `children` | Lambda de conteúdo (slot) |
+| Re-render | Recomposição |
+| `useState(0)` | `var x by remember { mutableStateOf(0) }` |
+| Lifting state up | State hoisting |
+| Imutabilidade (`[...lista, item]`) | `lista + item` |
+| `useEffect` | `LaunchedEffect` / `DisposableEffect` (**ainda não visto, Nível 2**) |
+
+#### Onde fica cada estado (visão geral, detalhes depois)
+
+```
+remember/rememberSaveable → estado de UI local (campo aberto, aba selecionada, texto digitado)
+ViewModel + StateFlow     → estado da tela/negócio (dados, carregando, erro)
+```
+
+A ponte ViewModel → Compose (`viewModelScope`, `collectAsStateWithLifecycle()`) ainda **não** foi vista. Está na lista de pendências do `PROGRESSO.md`.
+
+#### Exercício Nível 1: perguntas para responder sem consultar
+
+1. Explique com suas palavras a diferença entre UI imperativa e declarativa, e escreva a "fórmula" do Compose.
+2. Por que uma função `@Composable` não pode chamar uma API direto no corpo?
+3. Em que é parecido o fato de `@Composable` só poder ser chamada por outra `@Composable` com a regra do `suspend`?
+4. O que acontece com `var x by mutableStateOf(0)` sem `remember`? E com `var x = 0` com um botão fazendo `x++`?
+5. Um `remember { mutableStateOf("") }` guarda o texto digitado. O usuário gira o celular. O que acontece e como resolver?
+6. Uma lista em estado recebe `.add(item)` e a tela não atualiza. Por quê? Como corrigir?
+7. Transforme mentalmente um composable `CampoBusca` que tem `remember` dentro numa versão stateless: qual é a assinatura?
+8. Desenhe (no caderno) o fluxo estado/evento entre uma `TelaPlayer` (dona de `tocando: Boolean`) e um `BotaoPlay`.
+
 
 **Objetivo combinado em 2026-09-21:** ao chegar em Compose e começar a fazer projetos, criar entre 5 e 10 projetos básicos pra treinar Kotlin/Compose na prática, com nível crescente a cada um — treino solto, separado dos projetos reais de Nível 4 (GodiTrack/Orchestror).
 

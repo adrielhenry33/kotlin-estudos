@@ -66,11 +66,17 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
      │    ├─ ✅ FlowEx7.kt — combine, carrinho de compras: itens + cupom + tipo de
      │    │         entrega → resumo — concluído em 2026-09-28 COM solução entregue
      │    │         (usuário se perdeu no bloco do combine; revisar sem olhar depois)
-     │    └─ ⬜ stateIn / shareIn / callbackFlow   👈 VOCÊ ESTÁ AQUI
+     │    ├─ ✅ stateIn — teoria ✅ (2026-09-28); exercícios em src/Flow/StateIn/
+     │    │    └─ ✅ StateInEx1 — Parte A ✅ (3 estratégias observadas, A3 corrigida);
+     │    │              Parte B: B1/B2 sozinho, B3 (leitura + uiState) COM solução
+     │    │              entregue; B4/B5 ficaram pro usuário fechar sozinho (2026-09-29)
+     │    └─ ⏭️ shareIn / callbackFlow — adiado: aprender "no caminho", dentro do Compose
      └─ ⬜ Nível 4: Aplicações Reais
      │
      ▼
-⬜ 6. Jetpack Compose
+🔄 6. Jetpack Compose
+     ├─ 🔄 Nível 1: Fundações — teoria ✅ (2026-09-29, TEORIA.md §6); 8 perguntas
+     │         pra responder sem consultar   👈 VOCÊ ESTÁ AQUI
      └─ 9 projetos curados (Temperature Converter → To-Do Notes,
         ver lista completa abaixo), nível crescente
      │
@@ -206,9 +212,54 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 
 ---
 
+## PENDÊNCIAS EM ABERTO (ver antes de usar)
+
+> **Regra (pedido em 2026-09-29):** nada desta lista pode aparecer em exemplo ou exercício como se já fosse conhecido. Antes do primeiro uso: explicar o conceito (o que é, por que existe, ponte com React/TS), e só depois usar no código. Quando um item for ensinado, marcar ✅ com a data e onde foi praticado.
+
+**Deixados pra trás no Flow (aprender "no caminho"):**
+- [ ] `shareIn`: como o `stateIn`, só que gera um `SharedFlow` (eventos, replay configurável)
+- [ ] `callbackFlow`: transformar uma API de callback (localização, sensor, WebSocket/SSE) em Flow. Conecta com o GodiTrack
+- [ ] `StateInEx1`: fechar B4/B5 e o desafio extra (coletor novo depois de 6s com `WhileSubscribed(5_000)`)
+- [ ] Nível 4 de Flow e Nível 4 de Delegação (aplicações reais), ainda abertos no roadmap
+
+**Ponte ViewModel/Coroutines → Compose:**
+- [ ] `ViewModel` do Jetpack e `viewModelScope` (substitui o `scope` passado no construtor dos exercícios)
+- [ ] `collectAsStateWithLifecycle()` vs `collectAsState()`: como a tela observa o `StateFlow`, e por que isso casa com `WhileSubscribed(5_000)`
+- [ ] Eventos únicos (navegar, snackbar): `SharedFlow`/`Channel` vs estado. Conecta com o SharedFlowEx5
+
+**Estado no Compose:**
+- [x] Recomposição: o que é, quando acontece, por que a função composable roda várias vezes (teoria 2026-09-29)
+- [x] `remember` / `mutableStateOf` / `rememberSaveable` (≈ `useState`) (teoria 2026-09-29)
+- [x] State hoisting / UDF (estado desce, evento sobe), o equivalente a "lifting state up" no React (teoria 2026-09-29)
+- [ ] `derivedStateOf` (≈ `useMemo`)
+- [ ] Estabilidade (`@Stable`/`@Immutable`) e por que listas mutáveis causam recomposição extra (tópico avançado, ver depois do básico)
+
+**Efeitos colaterais (side effects), o equivalente ao `useEffect`:**
+- [ ] `LaunchedEffect(key)`: coroutine ligada ao ciclo de vida do composable; o que a `key` faz (≈ array de dependências)
+- [ ] `rememberCoroutineScope()`: lançar coroutine a partir de um clique (evento), não da composição
+- [ ] `DisposableEffect`: limpeza ao sair da tela (≈ o return do `useEffect`)
+- [ ] `SideEffect`, `produceState`, `snapshotFlow`: ponte entre o estado do Compose e o Flow
+- [ ] `rememberUpdatedState`: evitar valor "velho" dentro de um efeito longo
+
+**Estrutura e UI:**
+- [ ] `Modifier`: ordem importa (padding antes/depois de background)
+- [ ] Layouts: `Column`/`Row`/`Box`, `LazyColumn` + `key` (só `Column`, `Text` e `Button` apresentados de leve no Nível 1)
+- [ ] Material 3, tema e `Scaffold`
+- [ ] Navigation Compose (rotas, argumentos, ViewModel por tela)
+- [ ] Previews (`@Preview`)
+- [ ] Injeção de dependência (Hilt): só quando entrar Clean Architecture/Repository
+
+---
+
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-29** — Início de **Compose, Nível 1** (teoria). Visto: declarativo vs imperativo (UI = f(estado)); `@Composable` (PascalCase, `Unit`, parâmetros = props, só chamada por outra composable: paralelo com `suspend`/`Continuation` ↔ `Composer`); composição e árvore; recomposição granular (e por que o corpo não pode ter efeito colateral); `mutableStateOf` + `remember` + `by` (ponte com Delegação `getValue`/`setValue`), erros clássicos (sem remember, lista mutada com `.add`), `rememberSaveable`; state hoisting/UDF (ponte com o `ClimaViewModel`). Teoria em TEORIA.md §6 com blocos "📝 Caderno" (usuário anota à mão) e PDF regerado. Próximo: responder as 8 perguntas do Nível 1 sem consultar → correção → setup do projeto Android (Temperature Converter).
+
+- **2026-09-29** — `StateInEx1.kt`: Parte A concluída. Roteiro de `testarEstrategia` montado com ajuda: o padrão de bug antigo voltou (`delay` dentro do `collect`, `job.cancel()` logo depois do `launch`, faltava a etapa 1 e o encerramento; tentou `this.cancel()`, que cancelaria a `main`, trocado por `coroutineContext.cancelChildren()`). Rodado e conferido: só a Eagerly liga sem coletor, só a WhileSubscribed desliga sozinha (depois do timeout, dentro da etapa 5), e Eagerly/Lazily só param com o cancelamento do scope. Na A3 acertou a/b, errou a c (achou que parava "depois dos 1000ms") e não soube a d. Bônus observado: o coletor tardio na Eagerly recebe o último valor (21.0), não o `initialValue`. Parte B: B1/B2 feitos sozinho (bug: "Sao Paulo" sem acento); na B3 não enxergou que o `combine` é entre **o resultado da busca** e `_unidade`, e não entre `_cidade` e `_unidade`. Solução entregue (`leitura = _cidade.flatMapLatest { buscarTemperatura(it) }` + `combine(...).stateIn(scope, WhileSubscribed(5_000), Carregando)`). Explicado o erro "Cannot infer type for T1" (a propriedade `leitura` não existia) e a ordem de inicialização das propriedades. **Decisão do usuário:** fechar B4/B5 sozinho e ir direto pra **Compose**, aprendendo `shareIn`/`callbackFlow` no caminho. **Pontos fracos a reforçar no Compose:** timing do roteiro de coroutines (launch → dar tempo → cancelar) e pensar pipelines como "de onde vem cada dado".
+
+- **2026-09-28** — Teoria de `stateIn` dada (assinatura, frio→quente compartilhado, `Eagerly`/`Lazily`/`WhileSubscribed(5_000)` e o porquê no Android, pegadinhas: declarar como `val` uma vez, coroutine viva no scope, `initialValue`, variante `suspend`; `shareIn` apresentado por cima; ponte com RxJS `shareReplay`/`refCount`). Criado `src/Flow/StateIn/StateInEx1.kt` (pasta/pacote próprio `Flow.StateIn`, a pedido do usuário), com solução testada por fora antes de entregar e saída esperada conferida.
 
 - **2026-09-28** — `FlowEx7.kt` (combine, carrinho) finalizado **com solução completa entregue** a pedido do usuário. Ele acertou sozinho os StateFlows de origem, o `update { it + item }` e as funções públicas, mas travou no bloco do `combine`. Erros conceituais: (1) `{ a, b, c -> { ... } }` (o hábito do arrow function do JS cria uma lambda que devolve outra lambda); (2) tentar atribuir `_resumo.value.subtotal = ...` dentro do combine (as propriedades são `val` e o combine não escreve estado, só devolve um valor novo); (3) usar `map` como loop em vez de `sumOf`; (4) `aplicarCupom` ignorando string vazia impedia remover o cupom. TODO 8 resolvido com `coroutineContext.cancelChildren()`. Todos os totais bateram (165/200/180/210/165). **Ponto fraco a reforçar:** lambda que devolve valor (última expressão) vs lambda com efeito colateral. Próximo: `stateIn` (substitui o padrão launch+collect+`_state.value`), depois `shareIn`/`callbackFlow`.
 
