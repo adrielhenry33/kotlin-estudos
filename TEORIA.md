@@ -2,7 +2,7 @@
 
 > Documento vivo. Atualizado automaticamente sempre que avançamos um tópico no `PROGRESSO.md`. Contém a teoria com exemplos de cada assunto já estudado — o `PROGRESSO.md` é a fonte da verdade do *estado* do aprendizado, este arquivo é a fonte da verdade do *conteúdo*.
 
-Última atualização: 2026-09-29 (`StateInEx1` fechado; início de Compose: teoria do Nível 1)
+Última atualização: 2026-09-30 (Compose Nível 1 fechado: `remember` vs `rememberSaveable` a fundo, correção das 8 perguntas; próximo: projeto Temperature Converter)
 
 ---
 
@@ -31,7 +31,8 @@
     - [ ] `shareIn` / `callbackFlow` — adiado, aprender no caminho
   - [ ] Nível 4: Aplicações Reais
 - [ ] **6. Jetpack Compose** — EM PROGRESSO
-  - [ ] Nível 1: Fundações (declarativo, `@Composable`, composição/recomposição, `remember`/`mutableStateOf`, state hoisting) — teoria ✅ 2026-09-29, perguntas pendentes — **ATUAL**
+  - [x] Nível 1: Fundações (declarativo, `@Composable`, composição/recomposição, `remember`/`mutableStateOf`/`rememberSaveable`, state hoisting) — teoria 2026-09-29, perguntas corrigidas 2026-09-30
+  - [ ] Projeto 1: Temperature Converter (Android Studio, `~/AndroidStudioProjects/TemperatureConverter`) — **ATUAL**
   - Objetivo: 5 a 10 projetos básicos de treino, nível crescente, assim que o tópico começar. Lista curada em `PROGRESSO.md`, extraída de `solygambas/kotlin-projects`.
 - [ ] **7. Clean Architecture** — não iniciado
 - [ ] **8. Room Database** — não iniciado
@@ -844,6 +845,53 @@ Consequências práticas:
 > Pode rodar muitas vezes → sem efeito colateral
 > Variável local morre a cada recomposição
 
+#### 4.1 "Quem leu" = qual pedaço recompõe? (dúvida de 2026-09-29)
+
+**Nem a tela inteira nem só a linha.** O que recompõe é o **escopo de recomposição** mais próximo que leu o estado:
+- toda função `@Composable` comum é um escopo;
+- toda **lambda de conteúdo** comum também é um escopo (ex.: o `{ }` do `Button`);
+- **exceção:** `Column`, `Row` e `Box` são `inline`, então o `{ }` deles **não** é um escopo próprio. Uma leitura lá dentro conta como leitura da função que está em volta.
+
+"Ler" = acessar o valor **durante a composição** (no corpo, ao montar a UI). Ler ou escrever dentro de um `onClick` **não** conta, porque ele roda no clique e não na composição.
+
+```kotlin
+@Composable
+fun Tela() {
+    var cliques by remember { mutableStateOf(0) }
+    Column {
+        Cabecalho("Loja")                         // parâmetro igual → PULADO
+        Contador(cliques, onClique = { cliques++ })  // Tela LEU cliques aqui
+        Rodape()                                  // sem parâmetro mudado → PULADO
+    }
+}
+```
+
+Quando `cliques` muda:
+1. `Tela` leu `cliques` (para passar como argumento) → `Tela` roda de novo.
+2. `Cabecalho` e `Rodape` recebem os mesmos parâmetros → o Compose **pula** as duas.
+3. `Contador` recebe um valor novo → roda de novo.
+
+Agora com a leitura dentro do conteúdo do `Button`:
+
+```kotlin
+@Composable
+fun Contador() {
+    var cliques by remember { mutableStateOf(0) }
+    Text("Título")                                // NÃO roda de novo
+    Button(onClick = { cliques++ }) {             // onClick: não é leitura de composição
+        Text("Cliquei $cliques vezes")            // só ESTE bloco { } recompõe
+    }
+}
+```
+
+> 📝 Caderno
+> Recompõe o ESCOPO mais próximo que leu o estado
+> Escopo = função @Composable ou lambda de conteúdo
+> Column/Row/Box são inline → não criam escopo
+> Filho com parâmetros iguais → pulado
+> Ler no onClick não conta (não é composição)
+> Regra prática: ler o estado o mais perto possível de onde é usado
+
 #### 5. Estado: `mutableStateOf` e `remember`
 
 São duas peças com funções diferentes:
@@ -869,7 +917,7 @@ Leitura linha a linha:
 - `mutableStateOf(0)`: estado observável que começa em 0.
 - `remember { ... }`: na 1ª composição cria o estado, e nas recomposições devolve **o mesmo** objeto.
 - `by`: é **delegação de propriedade** (tópico 4!). Permite escrever `cliques` e `cliques++` em vez de `cliques.value`. Precisa dos imports `androidx.compose.runtime.getValue` e `setValue`, que são exatamente o `getValue`/`setValue` de um delegate.
-- O clique muda o estado → o `Text` que leu `cliques` recompõe → o número muda na tela.
+- O clique muda o estado → o **bloco `{ }` do `Button`** (onde `cliques` é lido para montar a string) recompõe → o `Text` recebe uma string nova → o número muda na tela. Quem "lê" é o escopo em que `$cliques` aparece, não o `Text` em si (ver §4.1).
 
 Erros clássicos:
 
@@ -901,6 +949,68 @@ inline fun <T> remember(calculation: () -> T): T
 > Sem remember → reseta · sem mutableStateOf → tela não sabe
 > Lista: criar nova (lista + item), nunca .add()
 > rememberSaveable = sobrevive a girar a tela
+
+#### 5.1 `remember` vs `rememberSaveable` a fundo (2026-09-30)
+
+**Por que existe:** no Android, uma **mudança de configuração** (girar a tela, tema claro/escuro, idioma, redimensionar janela) faz o sistema **destruir e recriar a Activity**. A composição inteira começa do zero.
+
+- `remember` guarda o valor **na composição** → morre junto com ela.
+- `rememberSaveable` guarda na composição **e** num `Bundle` (pacotinho que o Android preserva ao destruir a Activity e devolve ao recriar).
+- Ponte React: `useState` não tem esse problema, o navegador não destrói o componente ao girar a tela.
+
+**O que sobrevive a quê:**
+
+| Evento | variável comum | `remember` | `rememberSaveable` |
+|---|---|---|---|
+| Recomposição | ❌ | ✅ | ✅ |
+| Girar tela / tema / idioma | ❌ | ❌ | ✅ |
+| Sistema mata o app em segundo plano e o usuário volta | ❌ | ❌ | ✅ |
+| Composable sai da tela (`if` virou `false`) | ❌ | ❌ | ❌ |
+| Usuário fecha o app (tira dos recentes) | ❌ | ❌ | ❌ |
+
+`rememberSaveable` **não** é banco de dados: persistir de verdade é Room/DataStore/servidor.
+
+**Limitação: só entra no Bundle o que o Bundle aceita.**
+
+| Tipo | Funciona direto? |
+|---|---|
+| `Int`, `Boolean`, `Double`, `String` e arrays desses | ✅ |
+| `data class` própria (ex.: `Endereco(rua, numero, cidade)`) | ❌ crash em tempo de execução |
+| `data class` com `@Parcelize` (plugin `kotlin-parcelize`) | ✅ (ver depois) |
+| Tipo com `Saver` próprio | ✅ (ver depois) |
+
+Saída mais simples pra `data class`: um `rememberSaveable` de `String` por campo. O Bundle também é **pequeno** (centenas de KB, estourar = `TransactionTooLargeException`): lista grande da API fica no ViewModel.
+
+**Quando usar cada um (padrão de mercado), exemplo num app de música:**
+
+```kotlin
+@Composable
+fun TelaBiblioteca() {
+    var busca by rememberSaveable { mutableStateOf("") }          // texto digitado
+    var abaSelecionada by rememberSaveable { mutableStateOf(0) }  // aba escolhida
+    var menuAberto by remember { mutableStateOf(false) }          // tudo bem fechar ao girar
+    val formatador = remember { DecimalFormat("#,##0") }          // objeto, não estado
+}
+```
+
+Regra das 3 perguntas, nesta ordem:
+1. É **estado** (muda por ação do usuário) ou **objeto fixo** (formatador, calculadora)? Objeto → `remember` (é o `by lazy` da composição: evita recriar a cada recomposição, e recriar depois de girar devolve um objeto idêntico).
+2. Precisa sobreviver a **fechar o app**? Sim → Room/DataStore/servidor.
+3. Se **sumir ao girar**, o usuário reclama? Sim → `rememberSaveable` (tipo simples!). Não → `remember`. Dado de tela/negócio → ViewModel.
+
+Pegadinhas vistas no quiz do checkout (2026-09-30):
+- `rememberSaveable` **não** leva dado pra outra tela (isso é argumento de navegação ou ViewModel compartilhado).
+- A escolha `remember`/`saveable` **não** decide quando consultar a API (isso é evento). Os dois guardam só o valor.
+- `rememberSaveable` não é "o `remember` mais seguro": tem custo (serialização) e restrição (tipos simples).
+
+> 📝 Caderno
+> Girar tela = Activity recriada = composição do zero
+> remember → só recomposição
+> rememberSaveable → + girar tela + morte do processo (Bundle)
+> Nenhum sobrevive a: sair da tela (if) / fechar o app
+> data class no Saveable → crash (separar campos / @Parcelize / Saver)
+> 1. objeto fixo? → remember  2. fechar app? → Room  3. sumir irrita? → Saveable
+> Texto digitado → rememberSaveable, sempre
 
 #### 6. State hoisting (elevar o estado) e fluxo unidirecional
 
@@ -980,6 +1090,52 @@ A ponte ViewModel → Compose (`viewModelScope`, `collectAsStateWithLifecycle()`
 6. Uma lista em estado recebe `.add(item)` e a tela não atualiza. Por quê? Como corrigir?
 7. Transforme mentalmente um composable `CampoBusca` que tem `remember` dentro numa versão stateless: qual é a assinatura?
 8. Desenhe (no caderno) o fluxo estado/evento entre uma `TelaPlayer` (dona de `tocando: Boolean`) e um `BotaoPlay`.
+
+#### Correção das perguntas (2026-09-30)
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|
+| ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ com dica | ✅ com ajuste | ✅ corpo com solução |
+
+1. **Imperativa** = você diz *como mudar* a tela passo a passo (`findViewById(...).setText(...)`). **Declarativa** = você descreve *como a tela deve ser* para um estado; o framework calcula o que mudou. Fórmula: **`UI = f(estado)`**.
+2. Corpo roda várias vezes → várias requisições; chamar API é efeito colateral. Lugar certo: side effect (`LaunchedEffect`, a ver) ou ViewModel.
+3. Compilador injeta parâmetro escondido: `Continuation` (suspend) ↔ `Composer` (@Composable). Porta de entrada: `launch { }` ↔ `setContent { }`.
+4. `mutableStateOf` sem `remember`: clique muda, recompõe e **recria em 0**. `var x = 0`: muda a variável, mas o Compose **não sabe** → tela congelada.
+5. Perde o texto (Activity recriada). Solução: `rememberSaveable`.
+6. `.add()` mexe na **mesma** lista; `lista = lista` também não funciona (mesma referência, `==` igual). Certo: `List` imutável + `itens = itens + item` (≈ `[...lista, item]`). Alternativa: `mutableStateListOf()` (ver depois).
+7. `fun CampoBusca(texto: String, onTextoChange: (String) -> Unit)`: nome obrigatório, convenção `valor` + `onValorChange`.
+8. Solução:
+
+```kotlin
+@Composable
+fun TelaPlayer() {
+    var tocando by rememberSaveable { mutableStateOf(false) }   // dona do estado
+
+    Column {
+        Text(if (tocando) "♪ Tocando agora" else "Pausado")
+        BotaoPlay(
+            isPlaying = tocando,                    // estado desce ▼
+            onPlayerChange = { tocando = it }       // evento sobe ▲
+        )
+    }
+}
+
+@Composable
+fun BotaoPlay(isPlaying: Boolean, onPlayerChange: (Boolean) -> Unit) {
+    Button(onClick = { onPlayerChange(!isPlaying) }) {   // valor INVERTIDO
+        Text(if (isPlaying) "Pausar" else "Tocar")        // if como expressão
+    }
+}
+```
+
+Erros do rascunho: `onPlayerChange = it` (sem lambda, `it` não existe ali), nomes diferentes na chamada e na definição, `TextField` no lugar de `Button` (digitar ≠ clicar; e `onValueChange` entrega `String`, não `Boolean`), ternário `? :` (não existe em Kotlin), `onPlayerChange(isPlaying)` mandando o mesmo valor (botão morto). Variação de mercado: `onPlayPauseClick: () -> Unit` e o pai faz `tocando = !tocando`.
+
+> 📝 Caderno
+> Button(onClick = { ... }) { Text(...) } → onClick nos ( ), conteúdo nas { }
+> Toggle: onChange(!valor) · mandar o mesmo valor = botão morto
+> Kotlin não tem ternário: if (x) "a" else "b"  (?: é elvis, só pra null)
+> Texto do botão = AÇÃO do clique ("Pausar" quando está tocando)
+> Lista em estado: List imutável + (lista = lista + item)
 
 
 **Objetivo combinado em 2026-09-21:** ao chegar em Compose e começar a fazer projetos, criar entre 5 e 10 projetos básicos pra treinar Kotlin/Compose na prática, com nível crescente a cada um — treino solto, separado dos projetos reais de Nível 4 (GodiTrack/Orchestror).

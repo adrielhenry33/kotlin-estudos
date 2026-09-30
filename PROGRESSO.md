@@ -4,6 +4,40 @@
 
 ---
 
+## COMO RETOMAR EM OUTRA SESSÃO (ex.: terminal do Android Studio)
+
+> Criado em 2026-09-30. Os projetos Android (Temperature Converter etc.) ficam em `~/AndroidStudioProjects/<Projeto>`, **fora** deste repo. Uma sessão do Claude aberta lá **não carrega** as memórias deste projeto, por isso as regras estão copiadas abaixo e o prompt aponta os caminhos completos.
+
+**Arquivos (caminho completo):**
+- Progresso (estado): `/Users/macbook/IdeaProjects/kotlin-estudos/PROGRESSO.md`
+- Teoria (conteúdo): `/Users/macbook/IdeaProjects/kotlin-estudos/TEORIA.md`
+- PDF da teoria: `~/Desktop/kotlin-estudos-teoria.pdf`, gerado com `cd /Users/macbook/IdeaProjects/kotlin-estudos && /usr/bin/python3 tools/gerar_teoria_pdf.py`
+
+**Regras de tutoria que a sessão nova precisa seguir** (vêm das memórias da sessão do `kotlin-estudos`):
+1. Ler este `PROGRESSO.md` no início (roadmap, `👈 VOCÊ ESTÁ AQUI`, PENDÊNCIAS, último LOG) e seguir as regras de método/scaffold daqui.
+2. **Não assumir conceito:** nada da lista PENDÊNCIAS entra em exemplo/exercício antes de ser explicado (o que é, por que existe, ponte React/TS). Ao ensinar, marcar ✅ com data.
+3. **Padrão de mercado:** sempre mostrar a forma mais correta/idiomática de implementar, mesmo em curiosidades.
+4. **Cenários variados:** não prender exemplos só a GodiTrack/Orchestror (e-commerce, música, clima, jogos, finanças...).
+5. **Caderno:** o usuário anota à mão. Teoria com blocos `> 📝 Caderno` curtos, tabelas e diagramas ASCII copiáveis.
+6. **Sincronizar a cada progresso:** atualizar `PROGRESSO.md` (roadmap + LOG no topo) e `TEORIA.md`, e regerar o PDF.
+7. Responder em português, tom franco e técnico; dúvida = scaffold (dica 1 → 2 → 3 → solução só se pedir).
+
+**Prompt pra colar na sessão nova:**
+
+```
+Estou continuando meus estudos de Kotlin/Jetpack Compose que começaram em outra sessão.
+Antes de qualquer coisa, leia:
+- /Users/macbook/IdeaProjects/kotlin-estudos/PROGRESSO.md (principalmente "COMO RETOMAR EM OUTRA SESSÃO", o roadmap com 👈 VOCÊ ESTÁ AQUI, as PENDÊNCIAS e a última entrada do LOG)
+- /Users/macbook/IdeaProjects/kotlin-estudos/TEORIA.md, seção 6 (Jetpack Compose)
+Siga as regras de tutoria listadas no PROGRESSO.md (não assumir conceito, padrão de mercado, cenários variados, blocos "📝 Caderno", scaffold de dicas).
+Onde paramos: Nível 1 de Compose fechado. Agora é o projeto 1, Temperature Converter, nesta pasta (Android Studio).
+Etapa 1 (criar projeto Empty Activity e rodar o "Hello Android!") = [feita / deu erro: ...].
+Próximo: Etapa 2, tour pelo template (MainActivity, setContent, Theme, Greeting, @Preview); depois Etapa 3, mini-teoria de Modifier, Column/Row e TextField numérico com toDoubleOrNull(), e só então o enunciado.
+A cada progresso, atualize o PROGRESSO.md e o TEORIA.md e regere o PDF (/usr/bin/python3 tools/gerar_teoria_pdf.py, dentro de /Users/macbook/IdeaProjects/kotlin-estudos).
+```
+
+---
+
 ## OBJETIVO GERAL
 
 Dominar Kotlin nativo com Jetpack Compose para desenvolvimento Android/Mobile. Aplicar conhecimentos em projetos reais (GodiTrack e Orchestror). Transicionar de React Native/TypeScript pra Kotlin com compreensão profunda de padrões, genéricos e clean architecture.
@@ -75,8 +109,14 @@ Estrutura: Teoria fundamentada + Exercícios práticos + Aplicações em projeto
      │
      ▼
 🔄 6. Jetpack Compose
-     ├─ 🔄 Nível 1: Fundações — teoria ✅ (2026-09-29, TEORIA.md §6); 8 perguntas
-     │         pra responder sem consultar   👈 VOCÊ ESTÁ AQUI
+     ├─ ✅ Nível 1: Fundações — teoria (2026-09-29, TEORIA.md §6) + remember vs
+     │         rememberSaveable a fundo (§5.1) + 8 perguntas corrigidas (2026-09-30)
+     ├─ 🔄 Projeto 1: Temperature Converter (~/AndroidStudioProjects/TemperatureConverter)
+     │    ├─ ⬜ Etapa 1: criar projeto (Empty Activity/Compose) e rodar "Hello Android!"
+     │    │         no emulador   👈 VOCÊ ESTÁ AQUI
+     │    ├─ ⬜ Etapa 2: tour pelo template (MainActivity, setContent, Theme, Greeting, @Preview)
+     │    └─ ⬜ Etapa 3: mini-teoria (Modifier, Column/Row, TextField numérico,
+     │              toDoubleOrNull) → enunciado (rememberSaveable + state hoisting, sem ViewModel)
      └─ 9 projetos curados (Temperature Converter → To-Do Notes,
         ver lista completa abaixo), nível crescente
      │
@@ -231,6 +271,9 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 - [x] Recomposição: o que é, quando acontece, por que a função composable roda várias vezes (teoria 2026-09-29)
 - [x] `remember` / `mutableStateOf` / `rememberSaveable` (≈ `useState`) (teoria 2026-09-29)
 - [x] State hoisting / UDF (estado desce, evento sobe), o equivalente a "lifting state up" no React (teoria 2026-09-29)
+- [x] `remember` vs `rememberSaveable` a fundo: o que sobrevive a quê, limites do Bundle, regra das 3 perguntas (2026-09-30, TEORIA.md §5.1)
+- [ ] `@Parcelize` e `Saver`: `data class` própria no `rememberSaveable` (hoje: crash; saída provisória = um campo por `rememberSaveable`)
+- [ ] `mutableStateListOf()`: lista observável (hoje o padrão ensinado é `List` imutável + `lista = lista + item`)
 - [ ] `derivedStateOf` (≈ `useMemo`)
 - [ ] Estabilidade (`@Stable`/`@Immutable`) e por que listas mutáveis causam recomposição extra (tópico avançado, ver depois do básico)
 
@@ -245,7 +288,8 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 - [ ] `Modifier`: ordem importa (padding antes/depois de background)
 - [ ] Layouts: `Column`/`Row`/`Box`, `LazyColumn` + `key` (só `Column`, `Text` e `Button` apresentados de leve no Nível 1)
 - [ ] Material 3, tema e `Scaffold`
-- [ ] Navigation Compose (rotas, argumentos, ViewModel por tela)
+- [ ] Navigation Compose (rotas, argumentos, ViewModel por tela). Obs.: é assim, e não com `rememberSaveable`, que um dado vai pra outra tela
+- [ ] Estrutura do projeto Android: `MainActivity`, `setContent`, tema, `build.gradle.kts` do app (Etapa 2 do Temperature Converter)
 - [ ] Previews (`@Preview`)
 - [ ] Injeção de dependência (Hilt): só quando entrar Clean Architecture/Repository
 
@@ -254,6 +298,8 @@ Código roda em Kotlin local (IntelliJ). Exercícios começam com TODOs, você p
 ## LOG DE PROGRESSO
 
 > Cada entrada nova vai no topo, com data.
+
+- **2026-09-30** — **Compose Nível 1 concluído.** `remember` vs `rememberSaveable` a fundo (Activity recriada ao girar, tabela do que sobrevive a quê, Bundle só aceita tipos simples, `data class` dá crash, regra das 3 perguntas; TEORIA.md §5.1). Quiz do checkout: CEP ✅ com critério errado (achou que `saveable` leva dado pra outra tela/decide consulta), `NumberFormat` ❌ (é `remember`, objeto fixo), `Endereco` ⚠️ (caiu na pegadinha do Bundle), carrinho ✅ (nenhum, precisa persistência). Padrão do erro: usar `rememberSaveable` como "o mais seguro". Dúvida respondida: o stateless (`CampoCidade`/`TextField`) aparece **dentro** do stateful (`Column` com campo + `Text`), e stateful/stateless diz quem guarda o estado, não o que aparece. 8 perguntas do Nível 1: 2 e 3 ✅; 1 (imperativa descrita errado, faltou `UI = f(estado)`), 4 (faltou `var x = 0` → tela congelada) e 5 (faltou a solução) ⚠️; 6 com dica (`lista = lista + item`); 7 com ajuste (faltava o nome da função, convenção `onValorChange`); 8: desenho certo (dono + `rememberSaveable` + desce/sobe), mas o corpo do `BotaoPlay` saiu com **solução entregue** a pedido (erros: `onPlayerChange = it` sem lambda, `TextField` no lugar de `Button`, ternário `? :`, mandar o mesmo valor em vez de `!isPlaying`). **Pontos fracos a reforçar:** sintaxe Kotlin vs JS (ternário, lambda `{ x = it }`), escolher componente pelo tipo de interação. Android Studio + SDK + emulador já instalados. Próximo: projeto 1 **Temperature Converter**, Etapa 1 (criar projeto). O usuário vai continuar numa **sessão nova no terminal do Android Studio**, e por isso foi criada a seção "COMO RETOMAR EM OUTRA SESSÃO" com o prompt.
 
 - **2026-09-29** — Início de **Compose, Nível 1** (teoria). Visto: declarativo vs imperativo (UI = f(estado)); `@Composable` (PascalCase, `Unit`, parâmetros = props, só chamada por outra composable: paralelo com `suspend`/`Continuation` ↔ `Composer`); composição e árvore; recomposição granular (e por que o corpo não pode ter efeito colateral); `mutableStateOf` + `remember` + `by` (ponte com Delegação `getValue`/`setValue`), erros clássicos (sem remember, lista mutada com `.add`), `rememberSaveable`; state hoisting/UDF (ponte com o `ClimaViewModel`). Teoria em TEORIA.md §6 com blocos "📝 Caderno" (usuário anota à mão) e PDF regerado. Próximo: responder as 8 perguntas do Nível 1 sem consultar → correção → setup do projeto Android (Temperature Converter).
 
